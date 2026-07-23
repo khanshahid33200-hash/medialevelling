@@ -2114,25 +2114,29 @@ const AdminDashboard = () => {
                         <span className="font-bold text-slate-800">{selectedLead.name}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-xs font-semibold text-slate-400 uppercase">Email</span>
+                        <span className="text-xs font-semibold text-slate-400 uppercase">Email (Mail)</span>
                         <a href={`mailto:${selectedLead.email}`} className="text-sm font-medium text-indigo-600 hover:underline">
                           {selectedLead.email}
                         </a>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-xs font-semibold text-slate-400 uppercase">Phone</span>
-                        <span className="text-sm font-mono text-slate-700">{selectedLead.phone || 'N/A'}</span>
+                        <span className="text-xs font-semibold text-slate-400 uppercase">City</span>
+                        <span className="text-sm font-semibold text-slate-700">{selectedLead.city || 'N/A'}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-xs font-semibold text-slate-400 uppercase">Service</span>
+                        <span className="text-xs font-semibold text-slate-400 uppercase">Profession</span>
+                        <span className="text-sm font-semibold text-slate-700">{selectedLead.profession || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-semibold text-slate-400 uppercase">Inquiry Type</span>
                         <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
-                          {selectedLead.service || 'General Inquiry'}
+                          {selectedLead.type || selectedLead.service || 'General Inquiry'}
                         </Badge>
                       </div>
                     </div>
 
                     <div className="space-y-1.5">
-                      <span className="text-xs font-semibold text-slate-500 uppercase">Message Content:</span>
+                      <span className="text-xs font-semibold text-slate-500 uppercase">Query / Message Content:</span>
                       <div className="bg-slate-100/70 p-4 rounded-xl text-slate-800 text-sm leading-relaxed whitespace-pre-wrap border border-slate-200 font-sans">
                         {selectedLead.message}
                       </div>
