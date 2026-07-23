@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import { toast } from 'sonner';
-import { auth, db, signInWithEmailAndPassword, createUserWithEmailAndPassword, setDoc, doc } from '@/lib/firebase';
+import { auth, db, signInWithEmailAndPassword, createUserWithEmailAndPassword, setDoc, doc, collection, getDocs, onSnapshot } from '@/lib/firebase';
 
 // Recharts imports for Dashboard Graphs
 import {
@@ -266,6 +266,20 @@ const AdminDashboard = () => {
   useEffect(() => {
     if (isAuthenticated && adminPassword) {
       fetchData(adminPassword, adminEmail);
+    }
+
+    // Real-time listener for incoming contact form inquiries from Firestore
+    if (isAuthenticated && db) {
+      const unsub = onSnapshot(collection(db, 'contact_messages'), (snapshot) => {
+        const liveLeads: any[] = [];
+        snapshot.forEach((d) => liveLeads.push({ _id: d.id, ...d.data() }));
+        if (liveLeads.length > 0) {
+          setContactMessages(liveLeads);
+        }
+      }, (err) => {
+        console.warn('Real-time contact messages listener notice:', err);
+      });
+      return () => unsub();
     }
   }, [isAuthenticated, statusFilter, adminPassword, adminEmail]);
 
