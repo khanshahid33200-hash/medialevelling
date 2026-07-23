@@ -31,6 +31,8 @@ import {
   Rocket
 } from 'lucide-react';
 
+import { db, collection, addDoc } from '@/lib/firebase';
+
 const Audit = () => {
   const navigate = useNavigate();
   const formRef = useRef<HTMLFormElement>(null);
@@ -38,32 +40,67 @@ const Audit = () => {
   
   const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
     if (!formRef.current) return;
     
     const formData = new FormData(formRef.current);
-    
+    const name = (formData.get('name') as string) || '';
+    const email = (formData.get('email') as string) || '';
+    const website = (formData.get('website') as string) || '';
+    const goals = (formData.get('goals') as string) || '';
+
     try {
-      const response = await fetch('https://formspree.io/f/mwpqzqlj', {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Accept': 'application/json'
+      // 1. Save directly into Firebase Firestore
+      if (db) {
+        try {
+          await addDoc(collection(db, 'audits'), {
+            name: name.trim(),
+            email: email.trim().toLowerCase(),
+            website: website.trim(),
+            goals: goals.trim(),
+            type: 'Marketing Audit Request',
+            status: 'new',
+            createdAt: new Date().toISOString()
+          });
+
+          await addDoc(collection(db, 'contact_messages'), {
+            name: name.trim(),
+            email: email.trim().toLowerCase(),
+            phone: website ? `Website: ${website.trim()}` : '',
+            service: 'Free Marketing Audit',
+            message: `[Marketing Audit Request]\nWebsite: ${website}\nGoals: ${goals}`,
+            type: 'Audit Request',
+            status: 'new',
+            createdAt: new Date().toISOString()
+          });
+        } catch (fErr) {
+          console.warn('Firestore audit submit notice:', fErr);
         }
+      }
+
+      // 2. Submit to Backend API
+      try {
+        await fetch('/api/contact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            email,
+            phone: website ? `Website: ${website}` : '',
+            service: 'Free Marketing Audit',
+            message: `[Marketing Audit Request]\nWebsite: ${website}\nGoals: ${goals}`
+          })
+        });
+      } catch (aErr) {
+        fetch('https://formspree.io/f/mwpqzqlj', { method: 'POST', body: formData }).catch(() => {});
+      }
+
+      toast({
+        title: "Audit Request Submitted",
+        description: "Thank you! Our team will review your website & goals and send your audit within 24 hours.",
+        variant: "default",
       });
       
-      if (response.ok) {
-        toast({
-          title: "Audit Request Submitted",
-          description: "Thank you for your request. Our team will review your information and get back to you within 1-2 business days.",
-          variant: "default",
-        });
-        
-        formRef.current.reset();
-      } else {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to submit form');
-      }
+      formRef.current.reset();
     } catch (error) {
       console.error('Error submitting form:', error);
       toast({

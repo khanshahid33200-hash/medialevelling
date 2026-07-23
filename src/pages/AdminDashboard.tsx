@@ -88,6 +88,7 @@ const AdminDashboard = () => {
   const [contactMessages, setContactMessages] = useState<any[]>([]);
   const [selectedLead, setSelectedLead] = useState<any | null>(null);
   const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
+  const [formSubFilter, setFormSubFilter] = useState<'all' | 'project' | 'query' | 'audit'>('all');
 
   // Check authentication on mount
   useEffect(() => {
@@ -1548,23 +1549,54 @@ const AdminDashboard = () => {
             )}
 
             {/* ==========================================
-                TAB 5: CONTACT LEADS COLLECTOR
+                TAB 5: WEBSITE FORMS COLLECTOR
                 ========================================== */}
             {activeTab === 'leads' && (
               <div className="space-y-6 animate-fade-in">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                   <div>
                     <h2 className="text-xl font-bold text-slate-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                      Contact Inquiries & Leads
+                      Website Form Submissions & Leads Collector
                     </h2>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Messages submitted from the public website contact form saved in Firebase & Server
+                      Submissions collected from Project Contact, Ask Anything Query, and Marketing Audit forms
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
-                      Total Inquiries: {contactMessages.length}
-                    </Badge>
+                  
+                  {/* Form Type Sub-filters */}
+                  <div className="flex flex-wrap gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                    <button
+                      onClick={() => setFormSubFilter('all')}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                        formSubFilter === 'all' ? 'bg-white text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      All Forms ({contactMessages.length})
+                    </button>
+                    <button
+                      onClick={() => setFormSubFilter('project')}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                        formSubFilter === 'project' ? 'bg-white text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Project Leads
+                    </button>
+                    <button
+                      onClick={() => setFormSubFilter('query')}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                        formSubFilter === 'query' ? 'bg-white text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Ask Anything Queries
+                    </button>
+                    <button
+                      onClick={() => setFormSubFilter('audit')}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                        formSubFilter === 'audit' ? 'bg-white text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Audit Requests
+                    </button>
                   </div>
                 </div>
 
@@ -1574,23 +1606,34 @@ const AdminDashboard = () => {
                       <TableHeader className="bg-slate-50 border-b border-slate-200">
                         <TableRow>
                           <TableHead className="font-semibold py-4 pl-6 text-slate-700">Client Name & Email</TableHead>
-                          <TableHead className="font-semibold py-4 text-slate-700">Phone / Contact</TableHead>
-                          <TableHead className="font-semibold py-4 text-slate-700">Service Interested</TableHead>
-                          <TableHead className="font-semibold py-4 text-slate-700">Submitted Date</TableHead>
+                          <TableHead className="font-semibold py-4 text-slate-700">City / Location</TableHead>
+                          <TableHead className="font-semibold py-4 text-slate-700">Profession / Role</TableHead>
+                          <TableHead className="font-semibold py-4 text-slate-700">Form Category</TableHead>
+                          <TableHead className="font-semibold py-4 text-slate-700">Date</TableHead>
                           <TableHead className="font-semibold py-4 text-slate-700 text-center">Status</TableHead>
                           <TableHead className="font-semibold py-4 pr-6 text-slate-700 text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {contactMessages.length === 0 ? (
+                        {contactMessages.filter(msg => {
+                          if (formSubFilter === 'project') return !msg.type || msg.type === 'Project Inquiry';
+                          if (formSubFilter === 'query') return msg.type === 'Ask Anything Query' || msg.type === 'Query - Ask Anything';
+                          if (formSubFilter === 'audit') return msg.type === 'Audit Request' || msg.type === 'Marketing Audit Request';
+                          return true;
+                        }).length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={6} className="text-center py-12 text-slate-400">
+                            <TableCell colSpan={7} className="text-center py-12 text-slate-400">
                               <Mail className="h-8 w-8 mx-auto mb-2 text-slate-300" />
-                              No contact form inquiries yet. Submissions from the website Contact page will appear here.
+                              No form submissions found in this category.
                             </TableCell>
                           </TableRow>
                         ) : (
-                          contactMessages.map((msg) => (
+                          contactMessages.filter(msg => {
+                            if (formSubFilter === 'project') return !msg.type || msg.type === 'Project Inquiry';
+                            if (formSubFilter === 'query') return msg.type === 'Ask Anything Query' || msg.type === 'Query - Ask Anything';
+                            if (formSubFilter === 'audit') return msg.type === 'Audit Request' || msg.type === 'Marketing Audit Request';
+                            return true;
+                          }).map((msg) => (
                             <TableRow key={msg._id || msg.id} className="hover:bg-slate-50/50 border-b transition-colors">
                               <TableCell className="py-4 pl-6 font-semibold text-slate-800">
                                 <div className="flex flex-col">
@@ -1600,12 +1643,15 @@ const AdminDashboard = () => {
                                   </a>
                                 </div>
                               </TableCell>
-                              <TableCell className="py-4 text-sm text-slate-600 font-mono">
-                                {msg.phone || 'N/A'}
+                              <TableCell className="py-4 text-sm text-slate-700 font-medium">
+                                {msg.city || (msg.phone?.includes('City:') ? msg.phone.replace('City:', '').trim() : 'N/A')}
+                              </TableCell>
+                              <TableCell className="py-4 text-sm text-slate-700">
+                                {msg.profession || (msg.service?.includes('Profession:') ? msg.service.replace('Profession:', '').trim() : 'N/A')}
                               </TableCell>
                               <TableCell className="py-4">
                                 <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                  {msg.service || 'General Inquiry'}
+                                  {msg.type || msg.service || 'General Submission'}
                                 </Badge>
                               </TableCell>
                               <TableCell className="py-4 text-xs text-slate-500">
@@ -1631,7 +1677,7 @@ const AdminDashboard = () => {
                                     variant="outline"
                                     className="border-slate-200 text-slate-600 hover:bg-slate-100 rounded-lg text-xs"
                                   >
-                                    View Message
+                                    View Submission
                                   </Button>
                                 </div>
                               </TableCell>
