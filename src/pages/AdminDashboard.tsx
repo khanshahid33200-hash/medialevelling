@@ -158,41 +158,35 @@ const AdminDashboard = () => {
       }
 
       // 4. Fetch Contact Messages / Leads
+      let leads: any[] = [];
       if (db) {
         try {
           const leadSnap = await getDocs(collection(db, 'contact_messages'));
-          const firestoreLeads: any[] = [];
-          leadSnap.forEach(d => firestoreLeads.push({ _id: d.id, ...d.data() }));
-          if (firestoreLeads.length > 0) {
-            setContactMessages(firestoreLeads);
-          } else {
-            const leadRes = await fetch('/api/admin/contact-messages', {
-              headers: { 'X-Admin-Email': email, 'X-Admin-Password': pwd }
-            });
-            if (leadRes.ok) {
-              const leadData = await leadRes.json();
-              setContactMessages(leadData);
-            }
-          }
+          leadSnap.forEach(d => leads.push({ _id: d.id, ...d.data() }));
         } catch (fErr) {
-          const leadRes = await fetch('/api/admin/contact-messages', {
-            headers: { 'X-Admin-Email': email, 'X-Admin-Password': pwd }
-          });
-          if (leadRes.ok) {
-            const leadData = await leadRes.json();
-            setContactMessages(leadData);
-          }
+          console.warn('Firestore lead fetch notice:', fErr);
         }
-      } else {
+      }
+
+      try {
         const leadRes = await fetch('/api/admin/contact-messages', {
           headers: { 'X-Admin-Email': email, 'X-Admin-Password': pwd }
         });
         if (leadRes.ok) {
-          const leadData = await leadRes.json();
-          setContactMessages(leadData);
+          const apiLeads = await leadRes.json();
+          if (Array.isArray(apiLeads)) {
+            const existingIds = new Set(leads.map(l => l._id || l.id));
+            apiLeads.forEach((al: any) => {
+              const id = al._id || al.id;
+              if (!existingIds.has(id)) {
+                leads.push(al);
+              }
+            });
+          }
         }
-      }
+      } catch (aErr) {}
 
+      setContactMessages(leads);
       return true;
     } catch (err: any) {
       toast.error(err.message || 'Error syncing dashboard data');
@@ -275,7 +269,12 @@ const AdminDashboard = () => {
         const liveLeads: any[] = [];
         snapshot.forEach((d) => liveLeads.push({ _id: d.id, ...d.data() }));
         if (liveLeads.length > 0) {
-          setContactMessages(liveLeads);
+          setContactMessages(prev => {
+            const mergedMap = new Map();
+            prev.forEach(item => mergedMap.set(item._id || item.id, item));
+            liveLeads.forEach(item => mergedMap.set(item._id || item.id, item));
+            return Array.from(mergedMap.values());
+          });
         }
       }, (err) => {
         console.warn('Real-time contact messages listener notice:', err);
@@ -833,7 +832,7 @@ const AdminDashboard = () => {
   return (
     <>
       <Navigation />
-      <main className="min-h-screen bg-slate-50 dark:bg-slate-900 pt-32 pb-20 px-4 md:px-8">
+      <main className="min-h-screen bg-slate-50 dark:bg-slate-900 pt-44 md:pt-48 pb-20 px-4 md:px-8">
         {!isAuthenticated ? (
           /* Locked gate */
           <div className="max-w-md mx-auto mt-12">
