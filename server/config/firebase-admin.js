@@ -1,19 +1,22 @@
 import admin from 'firebase-admin';
 
-if (!admin.apps.length) {
+const getApps = () => admin?.apps || admin?.default?.apps || [];
+
+if (!getApps().length) {
   const projectId = process.env.FIREBASE_PROJECT_ID || 'media-levelling-2026';
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || 'firebase-adminsdk-fbsvc@media-levelling-2026.iam.gserviceaccount.com';
   let privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
   if (privateKey) {
-    // Replace escaped newlines if passed as a single line string
     privateKey = privateKey.replace(/\\n/g, '\n');
   }
 
   try {
     if (clientEmail && privateKey) {
-      admin.initializeApp({
-        credential: admin.credential.cert({
+      const cert = admin.credential ? admin.credential.cert : admin.default.credential.cert;
+      const init = admin.initializeApp || admin.default.initializeApp;
+      init({
+        credential: cert({
           projectId,
           clientEmail,
           privateKey
@@ -28,7 +31,8 @@ if (!admin.apps.length) {
   }
 }
 
-export const adminDb = admin.apps.length ? admin.firestore() : null;
-export const adminAuth = admin.apps.length ? admin.auth() : null;
+const activeAdmin = admin.apps ? admin : admin.default;
+export const adminDb = activeAdmin && activeAdmin.apps && activeAdmin.apps.length ? activeAdmin.firestore() : null;
+export const adminAuth = activeAdmin && activeAdmin.apps && activeAdmin.apps.length ? activeAdmin.auth() : null;
 
-export default admin;
+export default activeAdmin;

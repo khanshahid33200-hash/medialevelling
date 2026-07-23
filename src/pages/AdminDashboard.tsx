@@ -893,9 +893,7 @@ const AdminDashboard = () => {
   };
 
   return (
-    <>
-      <Navigation />
-      <div className="min-h-screen bg-[#F8FAFC] pt-24 md:pt-28 font-sans">
+    <div className="min-h-screen bg-[#F8FAFC] font-sans">
         {!isAuthenticated ? (
           /* Locked gate */
           <div className="max-w-md mx-auto pt-16 pb-28 px-4">
@@ -2351,8 +2349,6 @@ const AdminDashboard = () => {
           </div>
         )}
       </div>
-      <Footer />
-    </>
   );
 };
 

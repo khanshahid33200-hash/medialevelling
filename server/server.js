@@ -1034,7 +1034,8 @@ app.delete('/api/admin/portfolio/:itemId', authenticateAdmin, async (req, res) =
   } catch (error) {
     console.error('Error deleting portfolio item:', error);
     return res.status(500).json({ message: 'Failed to delete portfolio item' });
-  // ==========================================
+  }
+});
 // CONTACT MESSAGES / LEADS API ENDPOINTS
 // ==========================================
 
