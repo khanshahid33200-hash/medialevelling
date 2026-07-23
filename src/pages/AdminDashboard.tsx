@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import { toast } from 'sonner';
-import { auth, db } from '@/lib/firebase';
+import { auth, db, signInWithEmailAndPassword, createUserWithEmailAndPassword, setDoc, doc } from '@/lib/firebase';
 
 // Recharts imports for Dashboard Graphs
 import {
@@ -78,6 +78,11 @@ const AdminDashboard = () => {
   const [portfolioObjective, setPortfolioObjective] = useState('');
   const [portfolioApproach, setPortfolioApproach] = useState('');
   const [portfolioResults, setPortfolioResults] = useState('');
+
+  // Firebase Admin User Creation States
+  const [isAdminUserModalOpen, setIsAdminUserModalOpen] = useState(false);
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [newAdminPassword, setNewAdminPassword] = useState('');
 
   // Check authentication on mount
   useEffect(() => {
@@ -186,7 +191,7 @@ const AdminDashboard = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!adminEmail.trim()) {
-      toast.error('Admin email is required');
+      toast.error('Admin email or username is required');
       return;
     }
     if (!adminPassword.trim()) {
@@ -194,27 +199,102 @@ const AdminDashboard = () => {
       return;
     }
     
-    // Check credentials locally & via backend
-    const normalizedEmail = adminEmail.trim().toLowerCase();
-    if (
-      (normalizedEmail === 'owner@medialevelling.com' && adminPassword === 'MEDIA@19019') ||
-      adminPassword === 'MEDIA@19019' ||
-      adminPassword === 'admin123'
-    ) {
-      sessionStorage.setItem('adminEmail', adminEmail);
-      sessionStorage.setItem('adminPassword', adminPassword);
-      setIsAuthenticated(true);
-      toast.success('Admin unlocked successfully');
-      fetchData(adminPassword, adminEmail);
+    let emailToAuth = adminEmail.trim();
+    if (!emailToAuth.includes('@')) {
+      emailToAuth = `${emailToAuth}@medialevelling.com`;
+    }
+
+    setLoading(true);
+    try {
+      // 1. Authenticate with Firebase Auth
+      if (auth) {
+        try {
+          await signInWithEmailAndPassword(auth, emailToAuth, adminPassword);
+          sessionStorage.setItem('adminEmail', emailToAuth);
+          sessionStorage.setItem('adminPassword', adminPassword);
+          setIsAuthenticated(true);
+          toast.success('Authenticated via Firebase Auth');
+          fetchData(adminPassword, emailToAuth);
+          return;
+        } catch (firebaseErr: any) {
+          // If default owner credentials, create account in Firebase Auth automatically
+          if (emailToAuth.toLowerCase() === 'owner@medialevelling.com' && adminPassword === 'MEDIA@19019') {
+            try {
+              await createUserWithEmailAndPassword(auth, emailToAuth, adminPassword);
+              sessionStorage.setItem('adminEmail', emailToAuth);
+              sessionStorage.setItem('adminPassword', adminPassword);
+              setIsAuthenticated(true);
+              toast.success('Authenticated Owner in Firebase Auth');
+              fetchData(adminPassword, emailToAuth);
+              return;
+            } catch (cErr) {
+              // Fallback below
+            }
+          }
+        }
+      }
+
+      // 2. Fallback to local / backend verification
+      const normalizedEmail = emailToAuth.toLowerCase();
+      if (
+        (normalizedEmail === 'owner@medialevelling.com' && adminPassword === 'MEDIA@19019') ||
+        adminPassword === 'MEDIA@19019' ||
+        adminPassword === 'admin123'
+      ) {
+        sessionStorage.setItem('adminEmail', emailToAuth);
+        sessionStorage.setItem('adminPassword', adminPassword);
+        setIsAuthenticated(true);
+        toast.success('Admin unlocked successfully');
+        fetchData(adminPassword, emailToAuth);
+        return;
+      }
+
+      const success = await fetchData(adminPassword, emailToAuth);
+      if (success) {
+        sessionStorage.setItem('adminEmail', emailToAuth);
+        sessionStorage.setItem('adminPassword', adminPassword);
+        setIsAuthenticated(true);
+        toast.success('Admin unlocked');
+      } else {
+        toast.error('Invalid email or password');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Authentication error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateAdminUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAdminEmail.trim() || !newAdminPassword.trim()) {
+      toast.error('Both username/email and password are required');
       return;
     }
 
-    const success = await fetchData(adminPassword, adminEmail);
-    if (success) {
-      sessionStorage.setItem('adminEmail', adminEmail);
-      sessionStorage.setItem('adminPassword', adminPassword);
-      setIsAuthenticated(true);
-      toast.success('Admin unlocked');
+    let targetEmail = newAdminEmail.trim();
+    if (!targetEmail.includes('@')) {
+      targetEmail = `${targetEmail}@medialevelling.com`;
+    }
+
+    try {
+      if (auth) {
+        await createUserWithEmailAndPassword(auth, targetEmail, newAdminPassword.trim());
+      }
+      if (db) {
+        const docId = targetEmail.replace(/[^a-zA-Z0-9]/g, '_');
+        await setDoc(doc(db, 'admin_users', docId), {
+          email: targetEmail,
+          createdAt: new Date().toISOString(),
+          role: 'admin'
+        });
+      }
+      toast.success(`Admin user "${targetEmail}" created successfully in Firebase Auth!`);
+      setIsAdminUserModalOpen(false);
+      setNewAdminEmail('');
+      setNewAdminPassword('');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create Firebase user');
     }
   };
 
@@ -705,6 +785,14 @@ const AdminDashboard = () => {
               </div>
               
               <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                <Button 
+                  onClick={() => setIsAdminUserModalOpen(true)} 
+                  variant="outline"
+                  className="rounded-xl flex gap-2 items-center hover:bg-slate-100 bg-white border-indigo-200 text-indigo-700"
+                >
+                  <User className="h-4 w-4 text-indigo-600" />
+                  New Admin User
+                </Button>
                 <Button 
                   onClick={() => fetchData()} 
                   variant="outline" 
@@ -1715,6 +1803,54 @@ const AdminDashboard = () => {
                     </Button>
                     <Button type="submit" className="bg-[#18181b] hover:bg-black text-white rounded-xl px-6">
                       Save Project
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            {/* Create Admin User Modal (Firebase Auth) */}
+            <Dialog open={isAdminUserModalOpen} onOpenChange={setIsAdminUserModalOpen}>
+              <DialogContent className="sm:max-w-md rounded-2xl p-6 bg-white">
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                    <User className="h-5 w-5 text-indigo-600" /> Create Custom Admin User
+                  </DialogTitle>
+                  <DialogDescription>
+                    Add a new administrator to Firebase Authentication & Firestore database.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleCreateAdminUser} className="space-y-4 py-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="new-admin-email">Username or Email</Label>
+                    <Input
+                      id="new-admin-email"
+                      type="text"
+                      placeholder="mrshahidbabu or admin@medialevelling.com"
+                      value={newAdminEmail}
+                      onChange={(e) => setNewAdminEmail(e.target.value)}
+                      required
+                      className="rounded-xl py-5"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="new-admin-password">New Password</Label>
+                    <Input
+                      id="new-admin-password"
+                      type="password"
+                      placeholder="Enter strong password"
+                      value={newAdminPassword}
+                      onChange={(e) => setNewAdminPassword(e.target.value)}
+                      required
+                      className="rounded-xl py-5"
+                    />
+                  </div>
+                  <DialogFooter className="pt-4 flex gap-2">
+                    <Button type="button" variant="outline" onClick={() => setIsAdminUserModalOpen(false)} className="rounded-xl">
+                      Cancel
+                    </Button>
+                    <Button type="submit" className="bg-[#18181b] hover:bg-black text-white rounded-xl px-6">
+                      Create Admin User
                     </Button>
                   </DialogFooter>
                 </form>

@@ -1,6 +1,23 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { 
+  getAuth, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged,
+  updatePassword 
+} from 'firebase/auth';
+import { 
+  getFirestore, 
+  collection, 
+  getDocs, 
+  getDoc,
+  setDoc,
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc 
+} from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
@@ -17,5 +34,20 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-export { signInWithEmailAndPassword, signOut, collection, getDocs, addDoc, updateDoc, deleteDoc, doc };
+export { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword,
+  signOut, 
+  onAuthStateChanged,
+  updatePassword,
+  collection, 
+  getDocs, 
+  getDoc,
+  setDoc,
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc 
+};
+
 export default app;
