@@ -313,12 +313,38 @@ const AdminDashboard = () => {
       fetchData(adminPassword, adminEmail);
     }
 
+    const mergeLocalLeads = () => {
+      try {
+        const local = JSON.parse(localStorage.getItem('media_levelling_leads') || '[]');
+        if (local.length > 0) {
+          setContactMessages(prev => {
+            const mergedMap = new Map();
+            prev.forEach(item => mergedMap.set(item._id || item.id, item));
+            local.forEach((l: any) => mergedMap.set(l._id || l.id, l));
+            const arr = Array.from(mergedMap.values()) as any[];
+            return arr.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+          });
+        }
+      } catch (e) {}
+    };
+
     const handleLeadSubmitted = () => {
+      mergeLocalLeads();
       fetchData(adminPassword, adminEmail);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        mergeLocalLeads();
+      }
     };
 
     window.addEventListener('media_lead_submitted', handleLeadSubmitted);
     window.addEventListener('storage', handleLeadSubmitted);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Also run immediately to pick up any already-saved leads
+    mergeLocalLeads();
 
     // Real-time listener for incoming contact form inquiries from Firestore
     let unsub = () => {};
@@ -343,6 +369,7 @@ const AdminDashboard = () => {
       unsub();
       window.removeEventListener('media_lead_submitted', handleLeadSubmitted);
       window.removeEventListener('storage', handleLeadSubmitted);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [isAuthenticated, statusFilter, adminPassword, adminEmail]);
 
