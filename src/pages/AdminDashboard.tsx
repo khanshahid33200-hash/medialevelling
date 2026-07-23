@@ -882,10 +882,10 @@ const AdminDashboard = () => {
   return (
     <>
       <Navigation />
-      <main className="min-h-screen bg-slate-50 dark:bg-slate-900 pt-44 md:pt-48 pb-20 px-4 md:px-8">
+      <div className="min-h-screen bg-[#F8FAFC] pt-24 md:pt-28 font-sans">
         {!isAuthenticated ? (
           /* Locked gate */
-          <div className="max-w-md mx-auto mt-12">
+          <div className="max-w-md mx-auto pt-16 pb-28 px-4">
             <Card className="border border-slate-200 shadow-2xl bg-white rounded-3xl overflow-hidden">
               <CardHeader className="text-center p-8 bg-slate-50/50 border-b">
                 <ShieldAlert className="h-14 w-14 text-indigo-600 mx-auto mb-4" />
@@ -932,190 +932,268 @@ const AdminDashboard = () => {
             </Card>
           </div>
         ) : (
-          /* Workspace */
-          <div className="max-w-7xl mx-auto space-y-8 animate-fade-in-up">
+          /* Figma SaaS Dashboard Layout */
+          <div className="flex flex-col lg:flex-row min-h-[calc(100vh-6rem)]">
             
-            {/* Header controls */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6">
+            {/* Left SaaS Sidebar */}
+            <aside className="w-full lg:w-72 bg-[#0F172A] text-slate-300 flex flex-col justify-between p-6 shrink-0 border-r border-slate-800 shadow-2xl">
               <div>
-                <div className="flex items-center gap-3">
-                  <h1 className="text-3xl font-extrabold text-slate-900" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                    Control Center
-                  </h1>
-                  <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5 px-3 py-1 text-xs rounded-full">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    Firebase Connected
-                  </Badge>
+                {/* Brand / Logo */}
+                <div className="flex items-center gap-3 px-2 py-4 mb-6 border-b border-slate-800/80">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-indigo-500/30">
+                    ML
+                  </div>
+                  <div>
+                    <h2 className="text-white font-bold text-lg tracking-tight" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      MediaLevelling
+                    </h2>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">
+                      SaaS Control Portal
+                    </span>
+                  </div>
                 </div>
-                <p className="text-slate-500 mt-1">
-                  Verify payments, edit client orders, publish blog articles, and monitor real-time charts.
-                </p>
+
+                {/* Sidebar Navigation Links */}
+                <nav className="space-y-6">
+                  <div>
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 px-3 block mb-2">
+                      Analytics & Revenue
+                    </span>
+                    <button
+                      onClick={() => setActiveTab('analytics')}
+                      className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-semibold transition-all ${
+                        activeTab === 'analytics'
+                          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-bold'
+                          : 'hover:bg-slate-800/60 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <LayoutDashboard className="h-4 w-4" />
+                        <span>Analytics Overview</span>
+                      </div>
+                      <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full font-bold">Live</span>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab('orders')}
+                      className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-semibold transition-all mt-1.5 ${
+                        activeTab === 'orders'
+                          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-bold'
+                          : 'hover:bg-slate-800/60 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <ShoppingCart className="h-4 w-4" />
+                        <span>Orders & Payments</span>
+                      </div>
+                      <span className="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-semibold">{stats.totalCount}</span>
+                    </button>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 px-3 block mb-2">
+                      Content Management
+                    </span>
+                    <button
+                      onClick={() => setActiveTab('posts')}
+                      className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-semibold transition-all ${
+                        activeTab === 'posts'
+                          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-bold'
+                          : 'hover:bg-slate-800/60 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-4 w-4" />
+                        <span>Blog CMS Articles</span>
+                      </div>
+                      <span className="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-semibold">{posts.length}</span>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab('portfolio')}
+                      className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-semibold transition-all mt-1.5 ${
+                        activeTab === 'portfolio'
+                          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-bold'
+                          : 'hover:bg-slate-800/60 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Briefcase className="h-4 w-4" />
+                        <span>Portfolio Items</span>
+                      </div>
+                      <span className="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-semibold">{portfolioItems.length}</span>
+                    </button>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 px-3 block mb-2">
+                      Submissions & Inbox
+                    </span>
+                    <button
+                      onClick={() => setActiveTab('leads')}
+                      className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-semibold transition-all ${
+                        activeTab === 'leads'
+                          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-bold'
+                          : 'hover:bg-slate-800/60 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Mail className="h-4 w-4 text-indigo-400" />
+                        <span>Form Submissions</span>
+                      </div>
+                      <span className="text-[11px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full">{contactMessages.length}</span>
+                    </button>
+                  </div>
+                </nav>
               </div>
-              
-              <div className="flex flex-wrap gap-2 w-full md:w-auto">
-                <Button 
-                  onClick={uploadAllWebsiteDataToFirestore} 
-                  variant="outline"
-                  disabled={loading}
-                  className="rounded-xl flex gap-2 items-center hover:bg-emerald-50 bg-white border-emerald-300 text-emerald-700"
-                >
-                  <Upload className="h-4 w-4 text-emerald-600" />
-                  Upload Data to Firestore
-                </Button>
-                <Button 
-                  onClick={() => setIsAdminUserModalOpen(true)} 
-                  variant="outline"
-                  className="rounded-xl flex gap-2 items-center hover:bg-slate-100 bg-white border-indigo-200 text-indigo-700"
-                >
-                  <User className="h-4 w-4 text-indigo-600" />
-                  New Admin User
-                </Button>
-                <Button 
-                  onClick={() => fetchData()} 
-                  variant="outline" 
-                  disabled={loading}
-                  className="rounded-xl flex gap-2 items-center hover:bg-slate-100 bg-white"
-                >
-                  <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                  Sync Database
-                </Button>
-                <Button 
-                  onClick={handleLogout} 
-                  variant="destructive"
-                  className="rounded-xl flex gap-2 items-center"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Lock Dashboard
-                </Button>
+
+              {/* Sidebar Footer User Profile */}
+              <div className="pt-6 border-t border-slate-800 mt-8">
+                <div className="flex items-center justify-between bg-slate-800/50 p-3 rounded-2xl border border-slate-700/50">
+                  <div className="flex items-center gap-3 truncate">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 font-bold text-sm shrink-0">
+                      A
+                    </div>
+                    <div className="flex flex-col truncate">
+                      <span className="text-xs font-bold text-white truncate">Administrator</span>
+                      <span className="text-[10px] text-slate-400 truncate">{adminEmail}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    title="Lock Dashboard"
+                    className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-700/50 rounded-xl transition-colors shrink-0"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-            </div>
+            </aside>
 
-            {/* TAB SELECT BUTTONS */}
-            <div className="flex border-b border-slate-200 gap-1 overflow-x-auto pb-1">
-              <button
-                onClick={() => setActiveTab('analytics')}
-                className={`flex items-center gap-2 px-6 py-3 font-semibold text-sm border-b-2 transition-all rounded-t-xl ${
-                  activeTab === 'analytics'
-                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/40'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
-                }`}
-                style={{ fontFamily: 'Montserrat, sans-serif' }}
-              >
-                <LayoutDashboard className="h-4 w-4" />
-                Analytics Overview
-              </button>
+            {/* Main Content Workspace */}
+            <main className="flex-1 p-6 md:p-10 space-y-8 overflow-y-auto max-w-full">
               
-              <button
-                onClick={() => setActiveTab('orders')}
-                className={`flex items-center gap-2 px-6 py-3 font-semibold text-sm border-b-2 transition-all rounded-t-xl ${
-                  activeTab === 'orders'
-                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/40'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
-                }`}
-                style={{ fontFamily: 'Montserrat, sans-serif' }}
-              >
-                <ShoppingCart className="h-4 w-4" />
-                Orders Management ({stats.totalCount})
-              </button>
+              {/* Header Top Controls Bar */}
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      {activeTab === 'analytics' && 'Executive Analytics & Revenue'}
+                      {activeTab === 'orders' && 'Commercial Orders & Payments'}
+                      {activeTab === 'posts' && 'Blog Articles & Content CMS'}
+                      {activeTab === 'portfolio' && 'Case Studies & Portfolio Showcase'}
+                      {activeTab === 'leads' && 'Website Form Submissions & Leads'}
+                    </h1>
+                    <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 px-3 py-1 text-xs rounded-full">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      Firebase Live Connected
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Control portal for MediaLevelling digital marketing operations, client inquiries, and revenue tracking.
+                  </p>
+                </div>
 
-              <button
-                onClick={() => setActiveTab('posts')}
-                className={`flex items-center gap-2 px-6 py-3 font-semibold text-sm border-b-2 transition-all rounded-t-xl ${
-                  activeTab === 'posts'
-                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/40'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
-                }`}
-                style={{ fontFamily: 'Montserrat, sans-serif' }}
-              >
-                <FileText className="h-4 w-4" />
-                Articles / Posts ({posts.length})
-              </button>
+                <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                  <Button 
+                    onClick={uploadAllWebsiteDataToFirestore} 
+                    variant="outline"
+                    disabled={loading}
+                    className="rounded-xl flex gap-2 items-center hover:bg-emerald-50 bg-white border-emerald-300 text-emerald-700 text-xs font-semibold"
+                  >
+                    <Upload className="h-3.5 w-3.5 text-emerald-600" />
+                    Upload Data
+                  </Button>
+                  <Button 
+                    onClick={() => setIsAdminUserModalOpen(true)} 
+                    variant="outline"
+                    className="rounded-xl flex gap-2 items-center hover:bg-slate-100 bg-white border-indigo-200 text-indigo-700 text-xs font-semibold"
+                  >
+                    <User className="h-3.5 w-3.5 text-indigo-600" />
+                    + New Admin
+                  </Button>
+                  <Button 
+                    onClick={() => fetchData()} 
+                    variant="outline" 
+                    disabled={loading}
+                    className="rounded-xl flex gap-2 items-center hover:bg-slate-100 bg-white text-xs font-semibold"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+                    Sync
+                  </Button>
+                </div>
+              </div>
 
-              <button
-                onClick={() => setActiveTab('portfolio')}
-                className={`flex items-center gap-2 px-6 py-3 font-semibold text-sm border-b-2 transition-all rounded-t-xl ${
-                  activeTab === 'portfolio'
-                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/40'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
-                }`}
-                style={{ fontFamily: 'Montserrat, sans-serif' }}
-              >
-                <Briefcase className="h-4 w-4" />
-                Portfolio Items ({portfolioItems.length})
-              </button>
+              {/* KPI STAT CARDS */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <Card className="rounded-2xl border border-slate-200/80 shadow-sm bg-white hover:shadow-md transition-all">
+                  <CardContent className="p-6 flex items-center justify-between">
+                    <div className="space-y-1">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Total Volume</span>
+                      <h3 className="text-2xl font-extrabold text-indigo-600" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                        Rs. {stats.totalVolume.toLocaleString('en-IN')}
+                      </h3>
+                      <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full inline-block mt-1">
+                        ↑ +14.2% vs last month
+                      </span>
+                    </div>
+                    <div className="p-3.5 bg-indigo-50 text-indigo-600 rounded-2xl shadow-inner">
+                      <DollarSign className="h-6 w-6" />
+                    </div>
+                  </CardContent>
+                </Card>
 
-              <button
-                onClick={() => setActiveTab('leads')}
-                className={`flex items-center gap-2 px-6 py-3 font-semibold text-sm border-b-2 transition-all rounded-t-xl ${
-                  activeTab === 'leads'
-                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/40'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
-                }`}
-                style={{ fontFamily: 'Montserrat, sans-serif' }}
-              >
-                <Mail className="h-4 w-4 text-indigo-600" />
-                Contact Leads ({contactMessages.length})
-              </button>
-            </div>
+                <Card className="rounded-2xl border border-slate-200/80 shadow-sm bg-white hover:shadow-md transition-all">
+                  <CardContent className="p-6 flex items-center justify-between">
+                    <div className="space-y-1">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Pending UTRs</span>
+                      <h3 className="text-2xl font-extrabold text-amber-600" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                        {stats.pendingVerification}
+                      </h3>
+                      <span className="text-[11px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full inline-block mt-1">
+                        Requires Verification
+                      </span>
+                    </div>
+                    <div className="p-3.5 bg-amber-50 text-amber-600 rounded-2xl shadow-inner">
+                      <Clock className="h-6 w-6" />
+                    </div>
+                  </CardContent>
+                </Card>
 
-            {/* METRIC CARD WIDGETS */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card className="rounded-2xl border border-slate-200 shadow-sm bg-white">
-                <CardContent className="p-6 flex items-center justify-between">
-                  <div className="space-y-1">
-                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Volume</span>
-                    <h3 className="text-2xl font-extrabold text-indigo-600" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                      Rs. {stats.totalVolume.toLocaleString('en-IN')}
-                    </h3>
-                  </div>
-                  <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-                    <DollarSign className="h-6 w-6" />
-                  </div>
-                </CardContent>
-              </Card>
+                <Card className="rounded-2xl border border-slate-200/80 shadow-sm bg-white hover:shadow-md transition-all">
+                  <CardContent className="p-6 flex items-center justify-between">
+                    <div className="space-y-1">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Approved Orders</span>
+                      <h3 className="text-2xl font-extrabold text-emerald-600" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                        {stats.approvedCount}
+                      </h3>
+                      <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full inline-block mt-1">
+                        Verified Transactions
+                      </span>
+                    </div>
+                    <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-2xl shadow-inner">
+                      <CheckCircle2 className="h-6 w-6" />
+                    </div>
+                  </CardContent>
+                </Card>
 
-              <Card className="rounded-2xl border border-slate-200 shadow-sm bg-white">
-                <CardContent className="p-6 flex items-center justify-between">
-                  <div className="space-y-1">
-                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pending UTRs</span>
-                    <h3 className="text-2xl font-extrabold text-amber-600" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                      {stats.pendingVerification}
-                    </h3>
-                  </div>
-                  <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
-                    <Clock className="h-6 w-6" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-2xl border border-slate-200 shadow-sm bg-white">
-                <CardContent className="p-6 flex items-center justify-between">
-                  <div className="space-y-1">
-                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Approved Payments</span>
-                    <h3 className="text-2xl font-extrabold text-emerald-600" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                      {stats.approvedCount}
-                    </h3>
-                  </div>
-                  <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-                    <CheckCircle2 className="h-6 w-6" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-2xl border border-slate-200 shadow-sm bg-white">
-                <CardContent className="p-6 flex items-center justify-between">
-                  <div className="space-y-1">
-                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Sales</span>
-                    <h3 className="text-2xl font-extrabold text-slate-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                      {stats.totalCount}
-                    </h3>
-                  </div>
-                  <div className="p-3 bg-slate-100 text-slate-600 rounded-xl">
-                    <ShoppingCart className="h-6 w-6" />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                <Card className="rounded-2xl border border-slate-200/80 shadow-sm bg-white hover:shadow-md transition-all">
+                  <CardContent className="p-6 flex items-center justify-between">
+                    <div className="space-y-1">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Total Inquiries</span>
+                      <h3 className="text-2xl font-extrabold text-violet-600" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                        {contactMessages.length}
+                      </h3>
+                      <span className="text-[11px] font-semibold text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full inline-block mt-1">
+                        Active Client Leads
+                      </span>
+                    </div>
+                    <div className="p-3.5 bg-violet-50 text-violet-600 rounded-2xl shadow-inner">
+                      <Mail className="h-6 w-6" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
 
             {/* TAB CONTENT: ANALYTICS */}
             {activeTab === 'analytics' && (
@@ -2252,9 +2330,10 @@ const AdminDashboard = () => {
               </DialogContent>
             </Dialog>
 
+            </main>
           </div>
         )}
-      </main>
+      </div>
       <Footer />
     </>
   );
