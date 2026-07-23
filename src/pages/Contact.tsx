@@ -55,18 +55,26 @@ const Contact = () => {
     
     try {
       // 1. Save directly into Firebase Firestore
+      const newLeadObj = {
+        name: formData.name.trim(),
+        email: formData.email.trim().toLowerCase(),
+        phone: formData.phone?.trim() || '',
+        service: formData.service || 'General Inquiry',
+        message: formData.message.trim(),
+        type: 'Project Inquiry',
+        status: 'new',
+        createdAt: new Date().toISOString()
+      };
+
+      try {
+        const existingLeads = JSON.parse(localStorage.getItem('media_levelling_leads') || '[]');
+        existingLeads.unshift({ _id: `local-${Date.now()}`, ...newLeadObj });
+        localStorage.setItem('media_levelling_leads', JSON.stringify(existingLeads));
+      } catch (e) {}
+
       if (db) {
         try {
-          await addDoc(collection(db, 'contact_messages'), {
-            name: formData.name.trim(),
-            email: formData.email.trim().toLowerCase(),
-            phone: formData.phone?.trim() || '',
-            service: formData.service || 'General Inquiry',
-            message: formData.message.trim(),
-            type: 'Project Inquiry',
-            status: 'new',
-            createdAt: new Date().toISOString()
-          });
+          await addDoc(collection(db, 'contact_messages'), newLeadObj);
         } catch (firebaseErr) {
           console.warn('Firestore contact submit fallback:', firebaseErr);
         }
@@ -122,6 +130,25 @@ const Contact = () => {
 
     setIsQuerySubmitting(true);
     try {
+      const queryLeadObj = {
+        name: queryData.name.trim(),
+        email: queryData.email.trim().toLowerCase(),
+        phone: queryData.city ? `City: ${queryData.city.trim()}` : '',
+        service: queryData.profession ? `Profession: ${queryData.profession.trim()}` : 'Ask Anything Query',
+        message: `[Ask Anything Query]\nCity: ${queryData.city}\nProfession: ${queryData.profession}\nQuery: ${queryData.query}`,
+        city: queryData.city.trim(),
+        profession: queryData.profession.trim(),
+        type: 'Ask Anything Query',
+        status: 'new',
+        createdAt: new Date().toISOString()
+      };
+
+      try {
+        const existingLeads = JSON.parse(localStorage.getItem('media_levelling_leads') || '[]');
+        existingLeads.unshift({ _id: `local-${Date.now()}`, ...queryLeadObj });
+        localStorage.setItem('media_levelling_leads', JSON.stringify(existingLeads));
+      } catch (e) {}
+
       // 1. Save directly into Firebase Firestore 'queries' & 'contact_messages'
       if (db) {
         try {
@@ -136,18 +163,7 @@ const Contact = () => {
             createdAt: new Date().toISOString()
           });
 
-          await addDoc(collection(db, 'contact_messages'), {
-            name: queryData.name.trim(),
-            email: queryData.email.trim().toLowerCase(),
-            phone: queryData.city ? `City: ${queryData.city.trim()}` : '',
-            service: queryData.profession ? `Profession: ${queryData.profession.trim()}` : 'Ask Anything Query',
-            message: `[Ask Anything Query]\nCity: ${queryData.city}\nProfession: ${queryData.profession}\nQuery: ${queryData.query}`,
-            city: queryData.city.trim(),
-            profession: queryData.profession.trim(),
-            type: 'Ask Anything Query',
-            status: 'new',
-            createdAt: new Date().toISOString()
-          });
+          await addDoc(collection(db, 'contact_messages'), queryLeadObj);
         } catch (fErr) {
           console.warn('Firestore query submit notice:', fErr);
         }
