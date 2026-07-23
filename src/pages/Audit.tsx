@@ -11,7 +11,7 @@ import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import BackToTop from '@/components/BackToTop';
 import { useInViewAnimation } from '@/hooks/use-in-view-animation';
-import { toast, useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import {
   ArrowRight,
   BarChart3,

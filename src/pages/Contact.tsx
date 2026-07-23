@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Paperclip, Instagram, HelpCircle } from 'lucide-react';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { useInViewAnimation } from '@/hooks/use-in-view-animation';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
@@ -97,10 +97,7 @@ const Contact = () => {
       }
 
       setIsSuccess(true);
-      toast({
-        title: "Message received!",
-        description: "We'll get back to you within 24 hours.",
-      });
+      toast.success("Message received! We'll get back to you within 24 hours.");
 
       setTimeout(() => {
         setFormData({ name: '', email: '', phone: '', service: '', message: '' });
@@ -187,10 +184,7 @@ const Contact = () => {
       } catch (aErr) {}
 
       setIsQuerySuccess(true);
-      toast({
-        title: "Query submitted!",
-        description: "Thank you for asking. Our team will get back to you shortly.",
-      });
+      toast.success("Query submitted! Thank you for asking. Our team will get back to you shortly.");
 
       setTimeout(() => {
         setQueryData({ name: '', email: '', city: '', profession: '', query: '' });
