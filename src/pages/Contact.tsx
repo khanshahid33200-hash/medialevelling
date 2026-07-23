@@ -8,11 +8,14 @@ import { useInViewAnimation } from '@/hooks/use-in-view-animation';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import BackToTop from '@/components/BackToTop';
+import { db, collection, addDoc } from '@/lib/firebase';
 
 const Contact = () => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    phone: '',
+    service: '',
     message: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -31,32 +34,49 @@ const Contact = () => {
     setIsSubmitting(true);
     
     try {
-      const response = await fetch('https://formspree.io/f/mnnzrzda', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(formData)
+      // 1. Save directly into Firebase Firestore
+      if (db) {
+        try {
+          await addDoc(collection(db, 'contact_messages'), {
+            name: formData.name.trim(),
+            email: formData.email.trim().toLowerCase(),
+            phone: formData.phone?.trim() || '',
+            service: formData.service || 'General Inquiry',
+            message: formData.message.trim(),
+            status: 'new',
+            createdAt: new Date().toISOString()
+          });
+        } catch (firebaseErr) {
+          console.warn('Firestore contact submit fallback:', firebaseErr);
+        }
+      }
+
+      // 2. Submit to Backend API
+      try {
+        await fetch('/api/contact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+      } catch (apiErr) {
+        // Fallback Formspree
+        fetch('https://formspree.io/f/mnnzrzda', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        }).catch(() => {});
+      }
+
+      setIsSuccess(true);
+      toast({
+        title: "Message received!",
+        description: "We'll get back to you within 24 hours.",
       });
 
-      if (response.ok) {
-        setIsSuccess(true);
-        
-        toast({
-          title: "Message sent successfully!",
-          description: "We'll get back to you within 24 hours.",
-        });
-
-        // Reset form after success animation
-        setTimeout(() => {
-          setFormData({ name: '', email: '', message: '' });
-          setIsSuccess(false);
-        }, 2000);
-      } else {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to send message');
-      }
+      setTimeout(() => {
+        setFormData({ name: '', email: '', phone: '', service: '', message: '' });
+        setIsSuccess(false);
+      }, 2000);
     } catch (error) {
       console.error('Error submitting form:', error);
       toast({

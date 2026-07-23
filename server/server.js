@@ -1034,6 +1034,91 @@ app.delete('/api/admin/portfolio/:itemId', authenticateAdmin, async (req, res) =
   } catch (error) {
     console.error('Error deleting portfolio item:', error);
     return res.status(500).json({ message: 'Failed to delete portfolio item' });
+  // ==========================================
+// CONTACT MESSAGES / LEADS API ENDPOINTS
+// ==========================================
+
+const memoryContactMessages = [
+  {
+    _id: 'msg-1',
+    name: 'Aarav Sharma',
+    email: 'aarav@shikvaafoundation.org',
+    phone: '+91 9876543210',
+    service: 'Web Design & SEO',
+    message: 'Interested in upgrading our non-profit digital campaign and donation platform.',
+    status: 'new',
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000)
+  },
+  {
+    _id: 'msg-2',
+    name: 'Priya Verma',
+    email: 'priya@kasbha.com',
+    phone: '+91 9123456789',
+    service: 'Social Media Marketing',
+    message: 'We want to launch a new Instagram Reels campaign for boutique furniture.',
+    status: 'contacted',
+    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000)
+  }
+];
+
+// POST /api/contact
+app.post('/api/contact', async (req, res) => {
+  try {
+    const { name, email, phone, service, message } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ message: 'Name is required' });
+    if (!email || !email.trim()) return res.status(400).json({ message: 'Email is required' });
+
+    const newMsg = {
+      _id: `msg-${Date.now()}`,
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      phone: phone ? phone.trim() : '',
+      service: service || 'General Inquiry',
+      message: message ? message.trim() : '',
+      status: 'new',
+      createdAt: new Date()
+    };
+
+    memoryContactMessages.unshift(newMsg);
+    return res.status(201).json({ message: 'Contact inquiry received successfully', data: newMsg });
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to submit contact message', error: err.message });
+  }
+});
+
+// GET /api/admin/contact-messages
+app.get('/api/admin/contact-messages', authenticateAdmin, async (req, res) => {
+  try {
+    return res.json(memoryContactMessages);
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to fetch contact messages' });
+  }
+});
+
+// PATCH /api/admin/contact-messages/:id
+app.patch('/api/admin/contact-messages/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const item = memoryContactMessages.find(m => m._id === id);
+    if (!item) return res.status(404).json({ message: 'Message not found' });
+    if (status) item.status = status;
+    return res.json({ message: 'Status updated successfully', data: item });
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to update message' });
+  }
+});
+
+// DELETE /api/admin/contact-messages/:id
+app.delete('/api/admin/contact-messages/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const idx = memoryContactMessages.findIndex(m => m._id === id);
+    if (idx === -1) return res.status(404).json({ message: 'Message not found' });
+    memoryContactMessages.splice(idx, 1);
+    return res.json({ message: 'Message deleted successfully' });
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to delete message' });
   }
 });
 

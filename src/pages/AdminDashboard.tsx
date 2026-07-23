@@ -32,8 +32,8 @@ const AdminDashboard = () => {
   const [adminEmail, setAdminEmail] = useState('owner@medialevelling.com');
   const [adminPassword, setAdminPassword] = useState('');
   
-  // Dashboard views: 'analytics', 'orders', 'posts', 'portfolio'
-  const [activeTab, setActiveTab] = useState<'analytics' | 'orders' | 'posts' | 'portfolio'>('analytics');
+  // Dashboard views: 'analytics', 'orders', 'posts', 'portfolio', 'leads'
+  const [activeTab, setActiveTab] = useState<'analytics' | 'orders' | 'posts' | 'portfolio' | 'leads'>('analytics');
   
   // Lists
   const [orders, setOrders] = useState<any[]>([]);
@@ -83,6 +83,11 @@ const AdminDashboard = () => {
   const [isAdminUserModalOpen, setIsAdminUserModalOpen] = useState(false);
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [newAdminPassword, setNewAdminPassword] = useState('');
+
+  // Contact Form Collector States
+  const [contactMessages, setContactMessages] = useState<any[]>([]);
+  const [selectedLead, setSelectedLead] = useState<any | null>(null);
+  const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
 
   // Check authentication on mount
   useEffect(() => {
@@ -150,10 +155,109 @@ const AdminDashboard = () => {
         const portfolioData = await portfolioRes.json();
         setPortfolioItems(portfolioData);
       }
+
+      // 4. Fetch Contact Messages / Leads
+      if (db) {
+        try {
+          const leadSnap = await getDocs(collection(db, 'contact_messages'));
+          const firestoreLeads: any[] = [];
+          leadSnap.forEach(d => firestoreLeads.push({ _id: d.id, ...d.data() }));
+          if (firestoreLeads.length > 0) {
+            setContactMessages(firestoreLeads);
+          } else {
+            const leadRes = await fetch('/api/admin/contact-messages', {
+              headers: { 'X-Admin-Email': email, 'X-Admin-Password': pwd }
+            });
+            if (leadRes.ok) {
+              const leadData = await leadRes.json();
+              setContactMessages(leadData);
+            }
+          }
+        } catch (fErr) {
+          const leadRes = await fetch('/api/admin/contact-messages', {
+            headers: { 'X-Admin-Email': email, 'X-Admin-Password': pwd }
+          });
+          if (leadRes.ok) {
+            const leadData = await leadRes.json();
+            setContactMessages(leadData);
+          }
+        }
+      } else {
+        const leadRes = await fetch('/api/admin/contact-messages', {
+          headers: { 'X-Admin-Email': email, 'X-Admin-Password': pwd }
+        });
+        if (leadRes.ok) {
+          const leadData = await leadRes.json();
+          setContactMessages(leadData);
+        }
+      }
+
       return true;
     } catch (err: any) {
       toast.error(err.message || 'Error syncing dashboard data');
       return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const uploadAllWebsiteDataToFirestore = async () => {
+    if (!db) {
+      toast.error('Firebase Firestore connection not initialized');
+      return;
+    }
+    setLoading(true);
+    try {
+      let uploadedCount = 0;
+      // 1. Upload Posts / Blog Articles to Firestore
+      for (const p of posts) {
+        const docId = (p.slug || `post-${Date.now()}`).replace(/[^a-zA-Z0-9]/g, '_');
+        await setDoc(doc(db, 'posts', docId), {
+          title: p.title || '',
+          slug: p.slug || '',
+          summary: p.summary || '',
+          content: p.content || '',
+          author: p.author || 'Admin',
+          status: p.status || 'published',
+          createdAt: p.createdAt ? new Date(p.createdAt).toISOString() : new Date().toISOString()
+        });
+        uploadedCount++;
+      }
+
+      // 2. Upload Portfolio Items (including Shikvaa Foundation & Day Foundation)
+      for (const item of portfolioItems) {
+        const docId = (item.title || `portfolio-${Date.now()}`).toLowerCase().replace(/[^a-zA-Z0-9]/g, '_');
+        await setDoc(doc(db, 'portfolio', docId), {
+          title: item.title,
+          category: item.category,
+          image: item.image,
+          description: item.description,
+          stats: item.stats || '',
+          details: item.details || {},
+          createdAt: item.createdAt ? new Date(item.createdAt).toISOString() : new Date().toISOString()
+        });
+        uploadedCount++;
+      }
+
+      // 3. Upload Orders
+      for (const ord of orders) {
+        const docId = (ord.orderId || `ord-${Date.now()}`).replace(/[^a-zA-Z0-9]/g, '_');
+        await setDoc(doc(db, 'orders', docId), {
+          orderId: ord.orderId,
+          planName: ord.planName,
+          amount: ord.amount,
+          utrNumber: ord.utrNumber,
+          customerName: ord.customerName,
+          customerEmail: ord.customerEmail,
+          paymentStatus: ord.paymentStatus,
+          createdAt: ord.createdAt ? new Date(ord.createdAt).toISOString() : new Date().toISOString()
+        });
+        uploadedCount++;
+      }
+
+      toast.success(`Successfully uploaded ${uploadedCount} website items into Firebase Firestore!`);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to upload website data to Firestore');
     } finally {
       setLoading(false);
     }
@@ -786,6 +890,15 @@ const AdminDashboard = () => {
               
               <div className="flex flex-wrap gap-2 w-full md:w-auto">
                 <Button 
+                  onClick={uploadAllWebsiteDataToFirestore} 
+                  variant="outline"
+                  disabled={loading}
+                  className="rounded-xl flex gap-2 items-center hover:bg-emerald-50 bg-white border-emerald-300 text-emerald-700"
+                >
+                  <Upload className="h-4 w-4 text-emerald-600" />
+                  Upload Data to Firestore
+                </Button>
+                <Button 
                   onClick={() => setIsAdminUserModalOpen(true)} 
                   variant="outline"
                   className="rounded-xl flex gap-2 items-center hover:bg-slate-100 bg-white border-indigo-200 text-indigo-700"
@@ -865,6 +978,19 @@ const AdminDashboard = () => {
               >
                 <Briefcase className="h-4 w-4" />
                 Portfolio Items ({portfolioItems.length})
+              </button>
+
+              <button
+                onClick={() => setActiveTab('leads')}
+                className={`flex items-center gap-2 px-6 py-3 font-semibold text-sm border-b-2 transition-all rounded-t-xl ${
+                  activeTab === 'leads'
+                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/40'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
+                }`}
+                style={{ fontFamily: 'Montserrat, sans-serif' }}
+              >
+                <Mail className="h-4 w-4 text-indigo-600" />
+                Contact Leads ({contactMessages.length})
               </button>
             </div>
 
@@ -1408,6 +1534,104 @@ const AdminDashboard = () => {
             )}
 
             {/* ==========================================
+                TAB 5: CONTACT LEADS COLLECTOR
+                ========================================== */}
+            {activeTab === 'leads' && (
+              <div className="space-y-6 animate-fade-in">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      Contact Inquiries & Leads
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Messages submitted from the public website contact form saved in Firebase & Server
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                      Total Inquiries: {contactMessages.length}
+                    </Badge>
+                  </div>
+                </div>
+
+                <Card className="border border-slate-200 rounded-2xl shadow-lg bg-white overflow-hidden">
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader className="bg-slate-50 border-b border-slate-200">
+                        <TableRow>
+                          <TableHead className="font-semibold py-4 pl-6 text-slate-700">Client Name & Email</TableHead>
+                          <TableHead className="font-semibold py-4 text-slate-700">Phone / Contact</TableHead>
+                          <TableHead className="font-semibold py-4 text-slate-700">Service Interested</TableHead>
+                          <TableHead className="font-semibold py-4 text-slate-700">Submitted Date</TableHead>
+                          <TableHead className="font-semibold py-4 text-slate-700 text-center">Status</TableHead>
+                          <TableHead className="font-semibold py-4 pr-6 text-slate-700 text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {contactMessages.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center py-12 text-slate-400">
+                              <Mail className="h-8 w-8 mx-auto mb-2 text-slate-300" />
+                              No contact form inquiries yet. Submissions from the website Contact page will appear here.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          contactMessages.map((msg) => (
+                            <TableRow key={msg._id || msg.id} className="hover:bg-slate-50/50 border-b transition-colors">
+                              <TableCell className="py-4 pl-6 font-semibold text-slate-800">
+                                <div className="flex flex-col">
+                                  <span>{msg.name}</span>
+                                  <a href={`mailto:${msg.email}`} className="text-xs text-indigo-600 font-normal hover:underline mt-0.5">
+                                    {msg.email}
+                                  </a>
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-4 text-sm text-slate-600 font-mono">
+                                {msg.phone || 'N/A'}
+                              </TableCell>
+                              <TableCell className="py-4">
+                                <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                  {msg.service || 'General Inquiry'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="py-4 text-xs text-slate-500">
+                                {msg.createdAt ? new Date(msg.createdAt).toLocaleDateString() : 'Just now'}
+                              </TableCell>
+                              <TableCell className="py-4 text-center">
+                                <Badge className={
+                                  msg.status === 'contacted' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' :
+                                  msg.status === 'closed' ? 'bg-slate-100 text-slate-700 border-slate-300' :
+                                  'bg-amber-100 text-amber-800 border-amber-300 animate-pulse'
+                                }>
+                                  {msg.status || 'new'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="py-4 pr-6 text-right">
+                                <div className="flex gap-2 justify-end items-center">
+                                  <Button
+                                    onClick={() => {
+                                      setSelectedLead(msg);
+                                      setIsLeadModalOpen(true);
+                                    }}
+                                    size="sm"
+                                    variant="outline"
+                                    className="border-slate-200 text-slate-600 hover:bg-slate-100 rounded-lg text-xs"
+                                  >
+                                    View Message
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* ==========================================
                 DIALOUGE: EDIT ORDER MODAL
                 ========================================== */}
             <Dialog open={isEditOrderOpen} onOpenChange={setIsEditOrderOpen}>
@@ -1854,6 +2078,64 @@ const AdminDashboard = () => {
                     </Button>
                   </DialogFooter>
                 </form>
+              </DialogContent>
+            </Dialog>
+
+            {/* View Lead Inquiry Details Modal */}
+            <Dialog open={isLeadModalOpen} onOpenChange={setIsLeadModalOpen}>
+              <DialogContent className="sm:max-w-lg rounded-2xl p-6 bg-white">
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                    <Mail className="h-5 w-5 text-indigo-600" /> Lead Inquiry Details
+                  </DialogTitle>
+                  <DialogDescription>
+                    Client message details from the website contact form.
+                  </DialogDescription>
+                </DialogHeader>
+                {selectedLead && (
+                  <div className="space-y-4 py-2">
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-semibold text-slate-400 uppercase">Client Name</span>
+                        <span className="font-bold text-slate-800">{selectedLead.name}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-semibold text-slate-400 uppercase">Email</span>
+                        <a href={`mailto:${selectedLead.email}`} className="text-sm font-medium text-indigo-600 hover:underline">
+                          {selectedLead.email}
+                        </a>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-semibold text-slate-400 uppercase">Phone</span>
+                        <span className="text-sm font-mono text-slate-700">{selectedLead.phone || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-semibold text-slate-400 uppercase">Service</span>
+                        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                          {selectedLead.service || 'General Inquiry'}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <span className="text-xs font-semibold text-slate-500 uppercase">Message Content:</span>
+                      <div className="bg-slate-100/70 p-4 rounded-xl text-slate-800 text-sm leading-relaxed whitespace-pre-wrap border border-slate-200 font-sans">
+                        {selectedLead.message}
+                      </div>
+                    </div>
+
+                    <DialogFooter className="pt-4 flex gap-2">
+                      <Button variant="outline" onClick={() => setIsLeadModalOpen(false)} className="rounded-xl">
+                        Close
+                      </Button>
+                      <a href={`mailto:${selectedLead.email}?subject=Regarding your Media Levelling inquiry`}>
+                        <Button className="bg-[#18181b] hover:bg-black text-white rounded-xl px-6 flex items-center gap-2">
+                          <Mail className="h-4 w-4" /> Reply via Email
+                        </Button>
+                      </a>
+                    </DialogFooter>
+                  </div>
+                )}
               </DialogContent>
             </Dialog>
 
