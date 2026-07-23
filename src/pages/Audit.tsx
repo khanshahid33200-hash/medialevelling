@@ -49,6 +49,24 @@ const Audit = () => {
     const goals = (formData.get('goals') as string) || '';
 
     try {
+      const auditLeadObj = {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        phone: website ? `Website: ${website.trim()}` : '',
+        service: 'Free Marketing Audit',
+        message: `[Marketing Audit Request]\nWebsite: ${website}\nGoals: ${goals}`,
+        type: 'Audit Request',
+        status: 'new',
+        createdAt: new Date().toISOString()
+      };
+
+      try {
+        const existingLeads = JSON.parse(localStorage.getItem('media_levelling_leads') || '[]');
+        existingLeads.unshift({ _id: `local-${Date.now()}`, ...auditLeadObj });
+        localStorage.setItem('media_levelling_leads', JSON.stringify(existingLeads));
+        window.dispatchEvent(new CustomEvent('media_lead_submitted', { detail: auditLeadObj }));
+      } catch (e) {}
+
       // 1. Save directly into Firebase Firestore
       if (db) {
         try {
@@ -62,16 +80,7 @@ const Audit = () => {
             createdAt: new Date().toISOString()
           });
 
-          await addDoc(collection(db, 'contact_messages'), {
-            name: name.trim(),
-            email: email.trim().toLowerCase(),
-            phone: website ? `Website: ${website.trim()}` : '',
-            service: 'Free Marketing Audit',
-            message: `[Marketing Audit Request]\nWebsite: ${website}\nGoals: ${goals}`,
-            type: 'Audit Request',
-            status: 'new',
-            createdAt: new Date().toISOString()
-          });
+          await addDoc(collection(db, 'contact_messages'), auditLeadObj);
         } catch (fErr) {
           console.warn('Firestore audit submit notice:', fErr);
         }

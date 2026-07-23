@@ -313,9 +313,17 @@ const AdminDashboard = () => {
       fetchData(adminPassword, adminEmail);
     }
 
+    const handleLeadSubmitted = () => {
+      fetchData(adminPassword, adminEmail);
+    };
+
+    window.addEventListener('media_lead_submitted', handleLeadSubmitted);
+    window.addEventListener('storage', handleLeadSubmitted);
+
     // Real-time listener for incoming contact form inquiries from Firestore
+    let unsub = () => {};
     if (isAuthenticated && db) {
-      const unsub = onSnapshot(collection(db, 'contact_messages'), (snapshot) => {
+      unsub = onSnapshot(collection(db, 'contact_messages'), (snapshot) => {
         const liveLeads: any[] = [];
         snapshot.forEach((d) => liveLeads.push({ _id: d.id, ...d.data() }));
         if (liveLeads.length > 0) {
@@ -329,8 +337,13 @@ const AdminDashboard = () => {
       }, (err) => {
         console.warn('Real-time contact messages listener notice:', err);
       });
-      return () => unsub();
     }
+
+    return () => {
+      unsub();
+      window.removeEventListener('media_lead_submitted', handleLeadSubmitted);
+      window.removeEventListener('storage', handleLeadSubmitted);
+    };
   }, [isAuthenticated, statusFilter, adminPassword, adminEmail]);
 
   const calculateStats = (ordersList: any[]) => {
@@ -1743,9 +1756,11 @@ const AdminDashboard = () => {
                       </TableHeader>
                       <TableBody>
                         {contactMessages.filter(msg => {
-                          if (formSubFilter === 'project') return !msg.type || msg.type === 'Project Inquiry';
-                          if (formSubFilter === 'query') return msg.type === 'Ask Anything Query' || msg.type === 'Query - Ask Anything';
-                          if (formSubFilter === 'audit') return msg.type === 'Audit Request' || msg.type === 'Marketing Audit Request';
+                          if (formSubFilter === 'all') return true;
+                          const t = (msg.type || msg.service || '').toLowerCase();
+                          if (formSubFilter === 'project') return t.includes('project') || t.includes('inquiry') || !msg.type;
+                          if (formSubFilter === 'query') return t.includes('query') || t.includes('ask') || t.includes('anything');
+                          if (formSubFilter === 'audit') return t.includes('audit') || t.includes('free');
                           return true;
                         }).length === 0 ? (
                           <TableRow>
@@ -1756,9 +1771,11 @@ const AdminDashboard = () => {
                           </TableRow>
                         ) : (
                           contactMessages.filter(msg => {
-                            if (formSubFilter === 'project') return !msg.type || msg.type === 'Project Inquiry';
-                            if (formSubFilter === 'query') return msg.type === 'Ask Anything Query' || msg.type === 'Query - Ask Anything';
-                            if (formSubFilter === 'audit') return msg.type === 'Audit Request' || msg.type === 'Marketing Audit Request';
+                            if (formSubFilter === 'all') return true;
+                            const t = (msg.type || msg.service || '').toLowerCase();
+                            if (formSubFilter === 'project') return t.includes('project') || t.includes('inquiry') || !msg.type;
+                            if (formSubFilter === 'query') return t.includes('query') || t.includes('ask') || t.includes('anything');
+                            if (formSubFilter === 'audit') return t.includes('audit') || t.includes('free');
                             return true;
                           }).map((msg) => (
                             <TableRow key={msg._id || msg.id} className="hover:bg-slate-50/50 border-b transition-colors">

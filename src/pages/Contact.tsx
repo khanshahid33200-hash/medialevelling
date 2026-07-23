@@ -70,6 +70,7 @@ const Contact = () => {
         const existingLeads = JSON.parse(localStorage.getItem('media_levelling_leads') || '[]');
         existingLeads.unshift({ _id: `local-${Date.now()}`, ...newLeadObj });
         localStorage.setItem('media_levelling_leads', JSON.stringify(existingLeads));
+        window.dispatchEvent(new CustomEvent('media_lead_submitted', { detail: newLeadObj }));
       } catch (e) {}
 
       if (db) {
@@ -147,6 +148,7 @@ const Contact = () => {
         const existingLeads = JSON.parse(localStorage.getItem('media_levelling_leads') || '[]');
         existingLeads.unshift({ _id: `local-${Date.now()}`, ...queryLeadObj });
         localStorage.setItem('media_levelling_leads', JSON.stringify(existingLeads));
+        window.dispatchEvent(new CustomEvent('media_lead_submitted', { detail: queryLeadObj }));
       } catch (e) {}
 
       // 1. Save directly into Firebase Firestore 'queries' & 'contact_messages'
