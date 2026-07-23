@@ -10,8 +10,9 @@ import PortfolioItem from './models/PortfolioItem.js';
 // Load environment variables
 dotenv.config();
 
-// Connect to Database
+// Connect to Database & Firebase Admin
 connectDB();
+import('./config/firebase-admin.js');
 
 const app = express();
 
