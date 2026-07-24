@@ -23,15 +23,74 @@ const NOTIFICATION_RECEIVER_EMAIL = (process.env.NOTIFICATION_RECEIVER_EMAIL || 
 // ==========================================
 
 /**
- * sendEmailHelper — Serverless HTTPS & Nodemailer Mail Dispatcher
+ * sendEmailHelper — Multi-Provider Fail-Safe HTTP & SMTP Email Engine
  */
 const sendEmailHelper = async ({ to, subject, html, replyTo }) => {
-  const webAppUrl = (process.env.GMAIL_WEBAPP_URL || '').trim();
+  const fromEmail = (process.env.GMAIL_USER || 'medialeveling360@gmail.com').trim();
 
-  // Mode A: HTTPS Google Web App Relay (100% Reliable for Vercel Port 443 HTTPS)
+  // Provider 1: Resend API (HTTP HTTPS Port 443 — Official Vercel Partner)
+  if (process.env.RESEND_API_KEY) {
+    try {
+      console.log(`[Resend HTTP API] Sending email to ${to}...`);
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY.trim()}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: process.env.RESEND_FROM || 'Media Levelling <onboarding@resend.dev>',
+          to: [to],
+          subject,
+          html,
+          reply_to: replyTo || fromEmail
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        console.log(`[Resend Success]: Sent to ${to} | ID: ${data.id}`);
+        return { success: true, messageId: data.id };
+      }
+      console.warn('[Resend API Error Response]:', data);
+    } catch (e) {
+      console.error('[Resend Exception]:', e.message);
+    }
+  }
+
+  // Provider 2: Brevo API (HTTP HTTPS Port 443 — 300 Free Emails/Day)
+  if (process.env.BREVO_API_KEY) {
+    try {
+      console.log(`[Brevo HTTP API] Sending email to ${to}...`);
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': process.env.BREVO_API_KEY.trim(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          sender: { name: 'Media Levelling', email: fromEmail },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+          replyTo: { email: replyTo || fromEmail }
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        console.log(`[Brevo Success]: Sent to ${to} | MessageID: ${data.messageId}`);
+        return { success: true, messageId: data.messageId };
+      }
+      console.warn('[Brevo API Error Response]:', data);
+    } catch (e) {
+      console.error('[Brevo Exception]:', e.message);
+    }
+  }
+
+  // Provider 3: Google Apps Script Web App HTTPS Relay
+  const webAppUrl = (process.env.GMAIL_WEBAPP_URL || '').trim();
   if (webAppUrl && webAppUrl.startsWith('http')) {
     try {
-      console.log(`[HTTPS Relay] Sending email to ${to} via Google Web App...`);
+      console.log(`[Google WebApp Relay] Sending email to ${to}...`);
       const response = await fetch(webAppUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -39,23 +98,24 @@ const sendEmailHelper = async ({ to, subject, html, replyTo }) => {
           to,
           subject,
           html,
-          replyTo: replyTo || 'medialeveling360@gmail.com'
-        })
+          replyTo: replyTo || fromEmail
+        }),
+        redirect: 'follow'
       });
 
       const resText = await response.text();
-      console.log(`[HTTPS Relay Response]:`, resText);
-      return { success: true, messageId: `HTTPS-RELAY-${Date.now()}` };
+      if (response.ok && !resText.includes('403') && !resText.includes('You need access')) {
+        console.log(`[Google WebApp Success]: Sent to ${to}`);
+        return { success: true, messageId: `HTTPS-RELAY-${Date.now()}` };
+      }
+      console.warn('[Google WebApp Response Warning]:', resText.slice(0, 200));
     } catch (relayErr) {
-      console.error(`[HTTPS Relay Error]:`, relayErr.message);
-      // Fall through to Nodemailer backup
+      console.error('[Google WebApp Exception]:', relayErr.message);
     }
   }
 
-  // Mode B: Nodemailer Backup (for local development)
-  const fromEmail = (process.env.GMAIL_USER || 'medialeveling360@gmail.com').trim();
+  // Provider 4: Nodemailer Backup (Local Dev / Direct SMTP)
   const pass = (process.env.GMAIL_APP_PASSWORD || 'sswrottltaokgcxz').replace(/\s+/g, '');
-
   return new Promise((resolve) => {
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
@@ -66,7 +126,6 @@ const sendEmailHelper = async ({ to, subject, html, replyTo }) => {
       pool: false,
       maxConnections: 1,
       connectionTimeout: 8000,
-      greetingTimeout: 8000,
       socketTimeout: 8000
     });
 
