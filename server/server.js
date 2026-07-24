@@ -4,39 +4,46 @@ import dotenv from 'dotenv';
 import nodemailer from 'nodemailer';
 import './config/firebase-admin.js';
 
+// Prevent process crashes on Vercel Serverless Functions from unhandled stream errors
+process.on('uncaughtException', (err) => {
+  console.error('[Global Uncaught Exception Handled]:', err?.message || err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[Global Unhandled Rejection Handled]:', reason);
+});
+
 // Load environment variables
 dotenv.config();
-
-// ==========================================
-// GMAIL SMTP EMAIL TRANSPORT (nodemailer)
-// ==========================================
-const getGmailTransporter = () => {
-  const user = (process.env.GMAIL_USER || 'medialeveling360@gmail.com').trim();
-  const pass = (process.env.GMAIL_APP_PASSWORD || 'sswrottltaokgcxz').replace(/\s+/g, '');
-
-  return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    auth: { user, pass },
-    family: 4, // Force IPv4 to prevent socket hang on Vercel AWS Lambda
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 10000
-  });
-};
 
 // Receiver for all admin notifications (Form fills, purchases, UTR submissions, updates)
 const NOTIFICATION_RECEIVER_EMAIL = (process.env.NOTIFICATION_RECEIVER_EMAIL || 'khanshahid33200@gmail.com').trim();
 
+// ==========================================
+// GMAIL SMTP EMAIL TRANSPORT (Fail-Safe Dual Mode)
+// ==========================================
+
 /**
- * sendEmailHelper — robust helper to send emails via Gmail SMTP from medialeveling360@gmail.com
+ * sendEmailHelper — robust dual-mode helper to send emails via Gmail SMTP
  */
 const sendEmailHelper = async ({ to, subject, html, replyTo }) => {
   const fromEmail = (process.env.GMAIL_USER || 'medialeveling360@gmail.com').trim();
-  const transporter = getGmailTransporter();
+  const pass = (process.env.GMAIL_APP_PASSWORD || 'sswrottltaokgcxz').replace(/\s+/g, '');
 
+  // Attempt 1: Port 587 STARTTLS (Works across cloud firewalls)
   try {
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      requireTLS: true,
+      auth: { user: fromEmail, pass },
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 8000
+    });
+    transporter.on('error', err => console.error('[Nodemailer Primary Warning]:', err?.message || err));
+
     const info = await transporter.sendMail({
       from: `"Media Levelling" <${fromEmail}>`,
       to,
@@ -44,11 +51,35 @@ const sendEmailHelper = async ({ to, subject, html, replyTo }) => {
       html,
       replyTo: replyTo || fromEmail
     });
-    console.log(`[Email Success] Sent to ${to} | MessageID: ${info.messageId}`);
+    console.log(`[Email Success (587)] Sent to ${to} | MessageID: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
-  } catch (err) {
-    console.error(`[Email Error] Failed to send to ${to}:`, err);
-    return { success: false, error: err.message };
+  } catch (primaryErr) {
+    console.warn(`[Primary SMTP Port 587 Failed]: ${primaryErr.message}. Trying Fallback Port 465 SSL...`);
+
+    // Attempt 2: Service Gmail Port 465 SSL
+    try {
+      const fallbackTransporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: { user: fromEmail, pass },
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 8000
+      });
+      fallbackTransporter.on('error', err => console.error('[Nodemailer Fallback Warning]:', err?.message || err));
+
+      const info = await fallbackTransporter.sendMail({
+        from: `"Media Levelling" <${fromEmail}>`,
+        to,
+        subject,
+        html,
+        replyTo: replyTo || fromEmail
+      });
+      console.log(`[Email Success (Fallback 465)] Sent to ${to} | MessageID: ${info.messageId}`);
+      return { success: true, messageId: info.messageId };
+    } catch (fallbackErr) {
+      console.error(`[Email All Transports Failed]: Primary: ${primaryErr.message} | Fallback: ${fallbackErr.message}`);
+      return { success: false, error: `${primaryErr.message} (Fallback: ${fallbackErr.message})` };
+    }
   }
 };
 
