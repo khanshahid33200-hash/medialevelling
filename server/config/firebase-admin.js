@@ -4,7 +4,7 @@ const getApps = () => admin?.apps || admin?.default?.apps || [];
 
 if (!getApps().length) {
   const projectId = process.env.FIREBASE_PROJECT_ID || 'media-levelling-2026';
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || 'firebase-adminsdk-fbsvc@media-levelling-2026.iam.gserviceaccount.com';
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   let privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
   if (privateKey) {
@@ -31,8 +31,19 @@ if (!getApps().length) {
   }
 }
 
-const activeAdmin = admin.apps ? admin : admin.default;
-export const adminDb = activeAdmin && activeAdmin.apps && activeAdmin.apps.length ? activeAdmin.firestore() : null;
-export const adminAuth = activeAdmin && activeAdmin.apps && activeAdmin.apps.length ? activeAdmin.auth() : null;
+let db = null;
+let auth = null;
+try {
+  const apps = getApps();
+  if (apps.length) {
+    const activeAdmin = admin.apps ? admin : admin.default;
+    db = activeAdmin.firestore();
+    auth = activeAdmin.auth();
+  }
+} catch (e) {
+  console.warn('Firebase Admin Firestore/Auth init skipped:', e.message);
+}
 
-export default activeAdmin;
+export const adminDb = db;
+export const adminAuth = auth;
+export default admin;
