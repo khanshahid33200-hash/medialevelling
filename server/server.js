@@ -7,6 +7,7 @@ import connectDB from './config/db.js';
 import Order from './models/Order.js';
 import Post from './models/Post.js';
 import PortfolioItem from './models/PortfolioItem.js';
+import './config/firebase-admin.js';
 
 // Load environment variables
 dotenv.config();
@@ -119,7 +120,6 @@ const sendThankYouEmail = async ({ toEmail, toName, subject, bodyHtml }) => {
 
 // Connect to Database & Firebase Admin
 connectDB();
-import('./config/firebase-admin.js');
 
 const app = express();
 
