@@ -15,8 +15,14 @@ const getGmailTransporter = () => {
   const pass = (process.env.GMAIL_APP_PASSWORD || 'sswrottltaokgcxz').replace(/\s+/g, '');
 
   return nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user, pass }
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: { user, pass },
+    family: 4, // Force IPv4 to prevent socket hang on Vercel AWS Lambda
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000
   });
 };
 
@@ -1201,8 +1207,8 @@ app.post('/api/admin/send-email', authenticateAdmin, async (req, res) => {
         if (lead) lead.status = 'replied';
       }
 
-      // Send copy to admin khanshahid33200@gmail.com
-      await sendEmailHelper({
+      // Send copy to admin khanshahid33200@gmail.com (non-blocking)
+      sendEmailHelper({
         to: NOTIFICATION_RECEIVER_EMAIL,
         subject: `📤 Sent Reply to ${toEmail}: ${subject}`,
         html: `
@@ -1213,11 +1219,11 @@ app.post('/api/admin/send-email', authenticateAdmin, async (req, res) => {
             <p>${formattedMessageHtml}</p>
           </div>
         `
-      });
+      }).catch(err => console.warn('[Admin Copy Email Warning]:', err.message));
 
       return res.json({ message: `Formatted email successfully sent to ${toEmail}`, messageId: result.messageId });
     } else {
-      return res.status(500).json({ message: `Failed to send email: ${result.error}` });
+      return res.status(500).json({ message: `Failed to send email via SMTP: ${result.error}` });
     }
   } catch (err) {
     return res.status(500).json({ message: 'Error sending email from admin', error: err.message });
