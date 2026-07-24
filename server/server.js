@@ -19,17 +19,8 @@ const getGmailTransporter = () => {
   const pass = (process.env.GMAIL_APP_PASSWORD || 'sswrottltaokgcxz').replace(/\s+/g, '');
 
   return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // TLS via STARTTLS (faster in cloud/Vercel environments)
-    auth: { user, pass },
-    tls: {
-      rejectUnauthorized: false,
-      ciphers: 'SSLv3'
-    },
-    connectionTimeout: 8000,
-    greetingTimeout: 8000,
-    socketTimeout: 10000
+    service: 'gmail',
+    auth: { user, pass }
   });
 };
 
