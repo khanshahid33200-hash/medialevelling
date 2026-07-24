@@ -23,64 +23,79 @@ const NOTIFICATION_RECEIVER_EMAIL = (process.env.NOTIFICATION_RECEIVER_EMAIL || 
 // ==========================================
 
 /**
- * sendEmailHelper — robust dual-mode helper to send emails via Gmail SMTP
+ * sendEmailHelper — serverless-optimized fail-safe helper to send emails via Gmail SMTP
  */
 const sendEmailHelper = async ({ to, subject, html, replyTo }) => {
   const fromEmail = (process.env.GMAIL_USER || 'medialeveling360@gmail.com').trim();
   const pass = (process.env.GMAIL_APP_PASSWORD || 'sswrottltaokgcxz').replace(/\s+/g, '');
 
-  // Attempt 1: Port 587 STARTTLS (Works across cloud firewalls)
-  try {
+  return new Promise((resolve) => {
+    // Primary: Port 587 STARTTLS with pool: false & maxConnections: 1
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 587,
       secure: false,
       requireTLS: true,
       auth: { user: fromEmail, pass },
-      tls: { rejectUnauthorized: false },
+      pool: false, // CRITICAL: Disable socket pooling for Vercel serverless
+      maxConnections: 1,
       connectionTimeout: 8000,
       greetingTimeout: 8000,
       socketTimeout: 8000
     });
-    transporter.on('error', err => console.error('[Nodemailer Primary Warning]:', err?.message || err));
 
-    const info = await transporter.sendMail({
+    transporter.on('error', err => console.warn('[Nodemailer Primary Warning]:', err?.message || err));
+
+    transporter.sendMail({
       from: `"Media Levelling" <${fromEmail}>`,
       to,
       subject,
       html,
       replyTo: replyTo || fromEmail
+    }, (err, info) => {
+      try { transporter.close(); } catch (e) {}
+
+      if (err) {
+        console.warn(`[Primary SMTP Port 587 Failed]: ${err.message}. Trying Fallback Port 465 SSL...`);
+
+        // Fallback: Port 465 SSL service: 'gmail' with pool: false
+        try {
+          const fallbackTransporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: { user: fromEmail, pass },
+            pool: false,
+            maxConnections: 1,
+            connectionTimeout: 8000,
+            socketTimeout: 8000
+          });
+          fallbackTransporter.on('error', e => console.warn('[Fallback Warning]:', e?.message || e));
+
+          fallbackTransporter.sendMail({
+            from: `"Media Levelling" <${fromEmail}>`,
+            to,
+            subject,
+            html,
+            replyTo: replyTo || fromEmail
+          }, (fbErr, fbInfo) => {
+            try { fallbackTransporter.close(); } catch (e) {}
+
+            if (fbErr) {
+              console.error(`[All SMTP Transports Failed]: Primary: ${err.message} | Fallback: ${fbErr.message}`);
+              resolve({ success: false, error: `${err.message} (Fallback: ${fbErr.message})` });
+            } else {
+              console.log(`[Email Fallback Success]: Sent to ${to} | MessageID: ${fbInfo.messageId}`);
+              resolve({ success: true, messageId: fbInfo.messageId });
+            }
+          });
+        } catch (catchedFbErr) {
+          resolve({ success: false, error: `${err.message} (Fallback Exception: ${catchedFbErr.message})` });
+        }
+      } else {
+        console.log(`[Email Primary Success]: Sent to ${to} | MessageID: ${info.messageId}`);
+        resolve({ success: true, messageId: info.messageId });
+      }
     });
-    console.log(`[Email Success (587)] Sent to ${to} | MessageID: ${info.messageId}`);
-    return { success: true, messageId: info.messageId };
-  } catch (primaryErr) {
-    console.warn(`[Primary SMTP Port 587 Failed]: ${primaryErr.message}. Trying Fallback Port 465 SSL...`);
-
-    // Attempt 2: Service Gmail Port 465 SSL
-    try {
-      const fallbackTransporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: { user: fromEmail, pass },
-        connectionTimeout: 8000,
-        greetingTimeout: 8000,
-        socketTimeout: 8000
-      });
-      fallbackTransporter.on('error', err => console.error('[Nodemailer Fallback Warning]:', err?.message || err));
-
-      const info = await fallbackTransporter.sendMail({
-        from: `"Media Levelling" <${fromEmail}>`,
-        to,
-        subject,
-        html,
-        replyTo: replyTo || fromEmail
-      });
-      console.log(`[Email Success (Fallback 465)] Sent to ${to} | MessageID: ${info.messageId}`);
-      return { success: true, messageId: info.messageId };
-    } catch (fallbackErr) {
-      console.error(`[Email All Transports Failed]: Primary: ${primaryErr.message} | Fallback: ${fallbackErr.message}`);
-      return { success: false, error: `${primaryErr.message} (Fallback: ${fallbackErr.message})` };
-    }
-  }
+  });
 };
 
 /**
