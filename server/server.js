@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
+import nodemailer from 'nodemailer';
 import connectDB from './config/db.js';
 import Order from './models/Order.js';
 import Post from './models/Post.js';
@@ -9,6 +10,121 @@ import PortfolioItem from './models/PortfolioItem.js';
 
 // Load environment variables
 dotenv.config();
+
+// ==========================================
+// GMAIL SMTP EMAIL TRANSPORT (nodemailer)
+// ==========================================
+const getGmailTransporter = () => {
+  const user = (process.env.GMAIL_USER || 'medialeveling360@gmail.com').trim();
+  const pass = (process.env.GMAIL_APP_PASSWORD || 'sswrottltaokgcxz').replace(/\s+/g, '');
+
+  return nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // TLS via STARTTLS (faster in cloud/Vercel environments)
+    auth: { user, pass },
+    tls: {
+      rejectUnauthorized: false,
+      ciphers: 'SSLv3'
+    },
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 10000
+  });
+};
+
+// Receiver for all admin notifications (Form fills, purchases, UTR submissions, updates)
+const NOTIFICATION_RECEIVER_EMAIL = (process.env.NOTIFICATION_RECEIVER_EMAIL || 'khanshahid33200@gmail.com').trim();
+
+/**
+ * sendEmailHelper — robust helper to send emails via Gmail SMTP from medialeveling360@gmail.com
+ */
+const sendEmailHelper = async ({ to, subject, html, replyTo }) => {
+  const fromEmail = (process.env.GMAIL_USER || 'medialeveling360@gmail.com').trim();
+  const transporter = getGmailTransporter();
+
+  try {
+    const info = await transporter.sendMail({
+      from: `"Media Levelling" <${fromEmail}>`,
+      to,
+      subject,
+      html,
+      replyTo: replyTo || fromEmail
+    });
+    console.log(`[Email Success] Sent to ${to} | MessageID: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (err) {
+    console.error(`[Email Error] Failed to send to ${to}:`, err);
+    return { success: false, error: err.message };
+  }
+};
+
+/**
+ * sendThankYouEmail — sends a branded HTML thank-you email to the user
+ */
+const sendThankYouEmail = async ({ toEmail, toName, subject, bodyHtml }) => {
+  const fullHtml = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${subject}</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f4f6fb; font-family: 'Segoe UI', Arial, sans-serif; }
+    .wrapper { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 32px rgba(0,0,0,0.10); }
+    .header { background: linear-gradient(135deg, #18181b 0%, #2d2d40 100%); padding: 36px 40px 28px; text-align: center; }
+    .header h1 { margin: 0; color: #ffffff; font-size: 22px; font-weight: 700; letter-spacing: 0.5px; }
+    .header p { margin: 6px 0 0; color: #a1a1aa; font-size: 13px; }
+    .body { padding: 36px 40px; color: #27272a; }
+    .body h2 { font-size: 20px; font-weight: 700; margin: 0 0 8px; color: #18181b; }
+    .body p { font-size: 15px; line-height: 1.7; color: #3f3f46; margin: 0 0 16px; }
+    .info-box { background: #f8faff; border-left: 4px solid #6366f1; border-radius: 8px; padding: 16px 20px; margin: 20px 0; }
+    .info-box p { margin: 0; font-size: 14px; color: #52525b; }
+    .badge { display: inline-block; background: #ecfdf5; color: #059669; border: 1px solid #6ee7b7; border-radius: 999px; padding: 4px 14px; font-size: 13px; font-weight: 600; margin-bottom: 20px; }
+    .cta { text-align: center; margin: 28px 0; }
+    .cta a { background: #18181b; color: #ffffff; text-decoration: none; padding: 14px 36px; border-radius: 10px; font-size: 15px; font-weight: 600; display: inline-block; }
+    .divider { border: none; border-top: 1px solid #e4e4e7; margin: 24px 0; }
+    .footer { background: #fafafa; padding: 24px 40px; text-align: center; }
+    .footer p { margin: 0; font-size: 12px; color: #a1a1aa; line-height: 1.8; }
+    .footer a { color: #6366f1; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <h1>Media Levelling</h1>
+      <p>Digital Growth & Marketing Agency</p>
+    </div>
+    <div class="body">
+      <span class="badge">✓ Received</span>
+      ${bodyHtml}
+      <hr class="divider" />
+      <div class="info-box">
+        <p><strong>⏱ Response Time:</strong> We typically respond within <strong>24 hours</strong> on business days.</p>
+      </div>
+      <div class="cta">
+        <a href="https://www.media-levelling.com">Visit Our Website</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>
+        <strong>Media Levelling</strong><br />
+        <a href="mailto:info@medialevelling.com">info@medialevelling.com</a> &nbsp;|&nbsp;
+        <a href="https://instagram.com/medialevelling">@medialevelling</a>
+      </p>
+      <p style="margin-top:8px;">You received this email because you submitted a form on <a href="https://www.media-levelling.com">media-levelling.com</a>.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  return await sendEmailHelper({
+    to: `"${toName}" <${toEmail}>`,
+    subject,
+    html: fullHtml
+  });
+};
 
 // Connect to Database & Firebase Admin
 connectDB();
@@ -310,16 +426,59 @@ app.post('/api/orders', async (req, res) => {
       updatedAt: new Date()
     };
 
+    let savedOrder;
     if (isDbConnected()) {
       const order = new Order(orderData);
       await order.save();
+      savedOrder = order;
       console.log(`Saved order ${orderId} in MongoDB`);
-      return res.status(201).json(order);
     } else {
       memoryOrders.push(orderData);
+      savedOrder = orderData;
       console.log(`Saved order ${orderId} in MEMORY fallback (MongoDB offline)`);
-      return res.status(201).json(orderData);
     }
+
+    // Await thank-you email so Vercel Serverless doesn't freeze the process mid-flight
+    await sendThankYouEmail({
+      toEmail: orderData.email,
+      toName: orderData.customerName,
+      subject: `✅ Order Confirmed — ${orderData.productName} | Media Levelling`,
+      bodyHtml: `
+        <h2>Thank you, ${orderData.customerName}! 🎉</h2>
+        <p>Your order has been received and is being reviewed by our team. Here's a summary:</p>
+        <div class="info-box">
+          <p><strong>Order ID:</strong> ${orderId}</p>
+          <p><strong>Plan / Package:</strong> ${orderData.productName}</p>
+          <p><strong>Amount:</strong> ₹${orderData.amount.toLocaleString('en-IN')}</p>
+          <p><strong>Status:</strong> Pending Payment Verification</p>
+        </div>
+        <p>Please complete your payment and submit the UPI Transaction ID (UTR) within the next <strong>15 minutes</strong> to confirm your order. Our team will verify and activate your plan promptly.</p>
+        <p>If you have any questions, simply reply to this email or reach us at <a href="mailto:info@medialevelling.com">info@medialevelling.com</a>.</p>
+      `
+    });
+
+    // Send Admin Notification to khanshahid33200@gmail.com
+    await sendEmailHelper({
+      to: NOTIFICATION_RECEIVER_EMAIL,
+      subject: `💰 New Purchase / Order Placed: ${orderId} (₹${orderData.amount})`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e4e4e7; border-radius: 12px; max-width: 600px;">
+          <h2 style="color: #059669; margin-top: 0;">🎉 New Purchase Alert on Media Levelling</h2>
+          <p>A new customer has just placed an order on the website!</p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 16px 0;" />
+          <p><strong>Order ID:</strong> <span style="font-family: monospace;">${orderId}</span></p>
+          <p><strong>Customer Name:</strong> ${orderData.customerName}</p>
+          <p><strong>Customer Email:</strong> <a href="mailto:${orderData.email}">${orderData.email}</a></p>
+          <p><strong>Package / Product:</strong> ${orderData.productName}</p>
+          <p><strong>Amount:</strong> <strong style="font-size: 18px; color: #18181b;">₹${orderData.amount.toLocaleString('en-IN')}</strong></p>
+          <p><strong>Status:</strong> Pending UTR Submission</p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 16px 0;" />
+          <p style="font-size: 12px; color: #71717a;">Log in to the Admin Panel to manage this order.</p>
+        </div>
+      `
+    });
+
+    return res.status(201).json(savedOrder);
   } catch (error) {
     console.error('Error creating order:', error);
     return res.status(500).json({ message: 'Failed to create order', error: error.message });
@@ -405,6 +564,27 @@ app.post('/api/orders/:orderId/submit-txn', async (req, res) => {
       order.paymentStatus = 'submitted';
       await order.save();
 
+      // Notify Admin (khanshahid33200@gmail.com) about UTR submission
+      await sendEmailHelper({
+        to: NOTIFICATION_RECEIVER_EMAIL,
+        subject: `💳 Payment UTR Submitted for Order ${orderId}: UTR ${sanitizedTxnId}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e4e4e7; border-radius: 12px; max-width: 600px;">
+            <h2 style="color: #4f46e5; margin-top: 0;">💳 Payment UTR Submitted</h2>
+            <p>Customer has submitted their UPI Transaction ID for verification!</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 16px 0;" />
+            <p><strong>Order ID:</strong> ${orderId}</p>
+            <p><strong>Customer Name:</strong> ${order.customerName}</p>
+            <p><strong>Email:</strong> ${order.email}</p>
+            <p><strong>Package:</strong> ${order.productName}</p>
+            <p><strong>Amount:</strong> ₹${order.amount}</p>
+            <p><strong>Submitted UTR / Txn ID:</strong> <strong style="font-size: 18px; color: #059669; font-family: monospace;">${sanitizedTxnId}</strong></p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 16px 0;" />
+            <p>Please log in to your Admin Panel to verify and approve this payment.</p>
+          </div>
+        `
+      });
+
       return res.json({ message: 'Transaction ID submitted successfully', order });
     } else {
       const order = memoryOrders.find(o => o.orderId === orderId);
@@ -428,6 +608,25 @@ app.post('/api/orders/:orderId/submit-txn', async (req, res) => {
       order.upiTxnId = sanitizedTxnId;
       order.paymentStatus = 'submitted';
       order.updatedAt = new Date();
+
+      // Notify Admin (khanshahid33200@gmail.com) about UTR submission
+      await sendEmailHelper({
+        to: NOTIFICATION_RECEIVER_EMAIL,
+        subject: `💳 Payment UTR Submitted for Order ${orderId}: UTR ${sanitizedTxnId}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e4e4e7; border-radius: 12px; max-width: 600px;">
+            <h2 style="color: #4f46e5; margin-top: 0;">💳 Payment UTR Submitted</h2>
+            <p>Customer has submitted their UPI Transaction ID for verification!</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 16px 0;" />
+            <p><strong>Order ID:</strong> ${orderId}</p>
+            <p><strong>Customer Name:</strong> ${order.customerName}</p>
+            <p><strong>Email:</strong> ${order.email}</p>
+            <p><strong>Package:</strong> ${order.productName}</p>
+            <p><strong>Amount:</strong> ₹${order.amount}</p>
+            <p><strong>Submitted UTR / Txn ID:</strong> <strong style="font-size: 18px; color: #059669; font-family: monospace;">${sanitizedTxnId}</strong></p>
+          </div>
+        `
+      });
 
       return res.json({ message: 'Transaction ID submitted successfully', order });
     }
@@ -503,6 +702,26 @@ app.patch('/api/admin/orders/:orderId/verify', authenticateAdmin, async (req, re
 
       order.paymentStatus = status;
       await order.save();
+
+      // Notify customer of order status update
+      await sendEmailHelper({
+        to: order.email,
+        subject: `Order Update (${order.orderId}) — Media Levelling`,
+        html: `
+          <h2>Order Update Notification</h2>
+          <p>Hello ${order.customerName},</p>
+          <p>Your order (<strong>${order.orderId}</strong> - ${order.productName}) status has been updated to: <strong style="text-transform:uppercase; color:${status === 'approved' || status === 'verified' ? '#059669' : '#dc2626'}">${status}</strong>.</p>
+          <p>If you have any questions, please reply to this email or contact us at <a href="mailto:info@medialevelling.com">info@medialevelling.com</a>.</p>
+        `
+      });
+
+      // Also notify Admin at khanshahid33200@gmail.com
+      await sendEmailHelper({
+        to: NOTIFICATION_RECEIVER_EMAIL,
+        subject: `Order ${order.orderId} Marked as ${status.toUpperCase()}`,
+        html: `<p>Order <strong>${order.orderId}</strong> (${order.customerName} - ₹${order.amount}) has been marked as <strong>${status}</strong> by admin.</p>`
+      });
+
       return res.json({ message: `Order marked as ${status}`, order });
     } else {
       const order = memoryOrders.find(o => o.orderId === orderId);
@@ -512,6 +731,24 @@ app.patch('/api/admin/orders/:orderId/verify', authenticateAdmin, async (req, re
 
       order.paymentStatus = status;
       order.updatedAt = new Date();
+
+      await sendEmailHelper({
+        to: order.email,
+        subject: `Order Update (${order.orderId}) — Media Levelling`,
+        html: `
+          <h2>Order Update Notification</h2>
+          <p>Hello ${order.customerName},</p>
+          <p>Your order (<strong>${order.orderId}</strong> - ${order.productName}) status has been updated to: <strong style="text-transform:uppercase; color:${status === 'approved' || status === 'verified' ? '#059669' : '#dc2626'}">${status}</strong>.</p>
+          <p>If you have any questions, please reply to this email or contact us at <a href="mailto:info@medialevelling.com">info@medialevelling.com</a>.</p>
+        `
+      });
+
+      await sendEmailHelper({
+        to: NOTIFICATION_RECEIVER_EMAIL,
+        subject: `Order ${order.orderId} Marked as ${status.toUpperCase()}`,
+        html: `<p>Order <strong>${order.orderId}</strong> (${order.customerName} - ₹${order.amount}) has been marked as <strong>${status}</strong> by admin.</p>`
+      });
+
       return res.json({ message: `Order marked as ${status}`, order });
     }
   } catch (error) {
@@ -1081,7 +1318,86 @@ app.post('/api/contact', async (req, res) => {
     };
 
     memoryContactMessages.unshift(newMsg);
-    return res.status(201).json({ message: 'Contact inquiry received successfully', data: newMsg });
+
+    // Determine email content based on form type
+    const isAuditRequest = (service || '').toLowerCase().includes('audit');
+    const isQuery = (service || '').toLowerCase().includes('query') || (message || '').includes('[Ask Anything Query]');
+
+    let emailSubject, emailBodyHtml;
+
+    if (isAuditRequest) {
+      emailSubject = '🔍 Your Free Marketing Audit Request — Media Levelling';
+      emailBodyHtml = `
+        <h2>Thank you, ${newMsg.name}! 🙌</h2>
+        <p>We've received your <strong>Free Marketing Audit</strong> request. Our specialists are already reviewing your details.</p>
+        <div class="info-box">
+          <p><strong>Service Requested:</strong> Free Marketing Audit</p>
+          ${phone ? `<p><strong>Website / Info:</strong> ${phone}</p>` : ''}
+          ${message ? `<p><strong>Details:</strong> ${message.replace(/\[Marketing Audit Request\]/g, '').trim()}</p>` : ''}
+        </div>
+        <p>We will send you a detailed audit report and schedule a strategy call within <strong>24–48 hours</strong>.</p>
+        <p>In the meantime, feel free to browse our <a href="https://www.media-levelling.com/case-studies">Case Studies</a> to see how we've helped brands grow.</p>
+      `;
+    } else if (isQuery) {
+      emailSubject = '💬 Your Query Received — Media Levelling';
+      emailBodyHtml = `
+        <h2>Hey ${newMsg.name}, we've got your question! 👋</h2>
+        <p>Thank you for reaching out through our <strong>Ask Anything</strong> form. Our team will research your query and get back to you soon.</p>
+        <div class="info-box">
+          ${message ? `<p><strong>Your Query:</strong><br/>${message.replace(/\[Ask Anything Query\]/g, '').replace(/\n/g, '<br/>').trim()}</p>` : ''}
+        </div>
+        <p>We'll reply to this email address (<strong>${newMsg.email}</strong>) within <strong>24 hours</strong>.</p>
+      `;
+    } else {
+      emailSubject = '📩 Message Received — Media Levelling';
+      emailBodyHtml = `
+        <h2>Thank you, ${newMsg.name}! 🎯</h2>
+        <p>We've received your message and a member of our team will be in touch shortly.</p>
+        <div class="info-box">
+          ${service ? `<p><strong>Service of Interest:</strong> ${service}</p>` : ''}
+          ${message ? `<p><strong>Your Message:</strong><br/>${message.replace(/\n/g, '<br/>')}</p>` : ''}
+        </div>
+        <p>We typically respond within <strong>24 hours</strong>. For urgent matters, you can also reach us at <a href="mailto:info@medialevelling.com">info@medialevelling.com</a>.</p>
+      `;
+    }
+
+    // Await thank-you email so Vercel Serverless environment sends it before execution freezes
+    const emailResult = await sendThankYouEmail({
+      toEmail: newMsg.email,
+      toName: newMsg.name,
+      subject: emailSubject,
+      bodyHtml: emailBodyHtml
+    });
+
+    // Notify Admin (khanshahid33200@gmail.com) for every form submission
+    await sendEmailHelper({
+      to: NOTIFICATION_RECEIVER_EMAIL,
+      subject: `🔔 New ${newMsg.service} Submission from ${newMsg.name}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e4e4e7; border-radius: 12px; max-width: 600px;">
+          <h2 style="color: #4f46e5; margin-top: 0;">📩 New Form Submission / Lead</h2>
+          <p>A new lead has been submitted on <strong>Media Levelling</strong>!</p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 16px 0;" />
+          <p><strong>Name:</strong> ${newMsg.name}</p>
+          <p><strong>Email:</strong> <a href="mailto:${newMsg.email}">${newMsg.email}</a></p>
+          <p><strong>Phone / Info:</strong> ${newMsg.phone || 'N/A'}</p>
+          <p><strong>Service / Request Type:</strong> <span style="background: #eef2ff; color: #4f46e5; padding: 3px 8px; border-radius: 4px; font-weight: bold;">${newMsg.service}</span></p>
+          <p><strong>Message / Content:</strong></p>
+          <blockquote style="background: #f8fafc; padding: 14px; border-left: 4px solid #6366f1; border-radius: 6px; font-size: 14px; color: #334155; line-height: 1.6;">
+            ${(newMsg.message || '').replace(/\n/g, '<br/>')}
+          </blockquote>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 16px 0;" />
+          <p style="font-size: 12px; color: #64748b;">You can reply directly to this email or view it in the Admin Dashboard.</p>
+        </div>
+      `
+    });
+
+    return res.status(201).json({ 
+      message: 'Contact inquiry received successfully', 
+      data: newMsg,
+      emailStatus: emailResult.success ? 'sent' : 'failed',
+      emailError: emailResult.error || null
+    });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to submit contact message', error: err.message });
   }
@@ -1123,6 +1439,104 @@ app.delete('/api/admin/contact-messages/:id', authenticateAdmin, async (req, res
   }
 });
 
+
+// Route: Admin - Send Direct Email / Reply to Lead or Customer
+// POST /api/admin/send-email
+app.post('/api/admin/send-email', authenticateAdmin, async (req, res) => {
+  try {
+    const { toEmail, toName, subject, message, originalMessage, leadId } = req.body;
+    if (!toEmail || !toEmail.trim()) return res.status(400).json({ message: 'Target email is required' });
+    if (!subject || !subject.trim()) return res.status(400).json({ message: 'Subject is required' });
+    if (!message || !message.trim()) return res.status(400).json({ message: 'Message content is required' });
+
+    const formattedMessageHtml = message.trim().replace(/\n/g, '<br/>');
+    const formattedOriginalHtml = originalMessage ? originalMessage.trim().replace(/\n/g, '<br/>') : null;
+
+    const emailBodyHtml = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #27272a;">
+        <h2 style="color: #18181b; margin-top: 0; font-size: 20px;">Dear ${toName || 'Client'},</h2>
+        <div style="background: #ffffff; border: 1px solid #e4e4e7; border-left: 4px solid #6366f1; padding: 20px; border-radius: 8px; font-size: 15px; margin: 16px 0;">
+          ${formattedMessageHtml}
+        </div>
+
+        ${formattedOriginalHtml ? `
+          <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e4e4e7;">
+            <p style="font-size: 12px; font-weight: bold; color: #71717a; text-transform: uppercase; margin-bottom: 8px;">Your Original Inquiry:</p>
+            <blockquote style="background: #f8fafc; padding: 14px; border-left: 3px solid #cbd5e1; border-radius: 6px; font-size: 13px; color: #475569; margin: 0;">
+              ${formattedOriginalHtml}
+            </blockquote>
+          </div>
+        ` : ''}
+
+        <p style="margin-top: 24px; font-size: 14px;">If you have any further questions or would like to move forward, simply reply to this email.</p>
+        <p style="font-size: 14px; margin-bottom: 0;">Best regards,<br/><strong>Media Levelling Team</strong><br/><a href="https://www.media-levelling.com" style="color:#6366f1;">www.media-levelling.com</a></p>
+      </div>
+    `;
+
+    const result = await sendThankYouEmail({
+      toEmail: toEmail.trim(),
+      toName: toName ? toName.trim() : 'Valued Client',
+      subject: subject.trim(),
+      bodyHtml: emailBodyHtml
+    });
+
+    if (result.success) {
+      // Auto-update lead status to 'replied' if leadId passed
+      if (leadId) {
+        const lead = memoryContactMessages.find(m => m._id === leadId);
+        if (lead) lead.status = 'replied';
+      }
+
+      // Send copy to admin khanshahid33200@gmail.com
+      await sendEmailHelper({
+        to: NOTIFICATION_RECEIVER_EMAIL,
+        subject: `📤 Sent Reply to ${toEmail}: ${subject}`,
+        html: `
+          <p>Admin reply was sent to <strong>${toEmail}</strong> (${toName || 'Client'}):</p>
+          <div style="background:#f4f4f5; padding:15px; border-radius:8px;">
+            <p><strong>Subject:</strong> ${subject}</p>
+            <p><strong>Message:</strong></p>
+            <p>${formattedMessageHtml}</p>
+          </div>
+        `
+      });
+
+      return res.json({ message: `Formatted email successfully sent to ${toEmail}`, messageId: result.messageId });
+    } else {
+      return res.status(500).json({ message: `Failed to send email: ${result.error}` });
+    }
+  } catch (err) {
+    return res.status(500).json({ message: 'Error sending email from admin', error: err.message });
+  }
+});
+
+// Route: Admin - Test SMTP Email Connection
+// POST /api/admin/test-email
+app.post('/api/admin/test-email', authenticateAdmin, async (req, res) => {
+  try {
+    const targetEmail = req.body.email || NOTIFICATION_RECEIVER_EMAIL;
+    const result = await sendThankYouEmail({
+      toEmail: targetEmail,
+      toName: 'Shahid Khan',
+      subject: '🧪 Test Email from Media Levelling Backend',
+      bodyHtml: `
+        <h2>SMTP Test Successful! 🎉</h2>
+        <p>Your Gmail SMTP integration on Media Levelling is working perfectly.</p>
+        <p>Sender: <strong>medialeveling360@gmail.com</strong></p>
+        <p>Receiver: <strong>${targetEmail}</strong></p>
+        <p>Timestamp: <strong>${new Date().toISOString()}</strong></p>
+      `
+    });
+
+    if (result.success) {
+      return res.json({ message: `Test email successfully sent to ${targetEmail}` });
+    } else {
+      return res.status(500).json({ message: `SMTP test failed: ${result.error}` });
+    }
+  } catch (err) {
+    return res.status(500).json({ message: 'SMTP Test Exception', error: err.message });
+  }
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {

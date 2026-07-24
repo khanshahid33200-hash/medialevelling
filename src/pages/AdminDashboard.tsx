@@ -90,6 +90,16 @@ const AdminDashboard = () => {
   const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
   const [formSubFilter, setFormSubFilter] = useState<'all' | 'project' | 'query' | 'audit'>('all');
 
+  // Custom Admin Email Dialog States
+  const [isSendEmailModalOpen, setIsSendEmailModalOpen] = useState(false);
+  const [targetEmail, setTargetEmail] = useState('');
+  const [targetName, setTargetName] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailMessage, setEmailMessage] = useState('');
+  const [inlineReplyText, setInlineReplyText] = useState('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isTestingEmail, setIsTestingEmail] = useState(false);
+
   // Check authentication on mount
   useEffect(() => {
     const savedEmail = sessionStorage.getItem('adminEmail');
@@ -503,6 +513,93 @@ const AdminDashboard = () => {
       setNewAdminPassword('');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create Firebase user');
+    }
+  };
+
+  // ==========================================
+  // SMTP EMAIL FUNCTIONS (TEST & DIRECT SEND)
+  // ==========================================
+
+  const handleTestEmail = async () => {
+    setIsTestingEmail(true);
+    try {
+      const response = await fetch('/api/admin/test-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Password': adminPassword
+        },
+        body: JSON.stringify({ email: adminEmail })
+      });
+
+      let data;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        throw new Error(text || `HTTP ${response.status} Error`);
+      }
+
+      if (!response.ok) throw new Error(data.message || 'SMTP Test failed');
+      toast.success(`✅ ${data.message}`);
+    } catch (err: any) {
+      toast.error(`❌ SMTP Error: ${err.message}`);
+    } finally {
+      setIsTestingEmail(false);
+    }
+  };
+
+  const handleOpenSendEmailModal = (recipientEmail: string, recipientName: string, defaultSubject = '', defaultMsg = '') => {
+    setTargetEmail(recipientEmail);
+    setTargetName(recipientName);
+    setEmailSubject(defaultSubject || `Update from Media Levelling Team`);
+    setEmailMessage(defaultMsg);
+    setIsSendEmailModalOpen(true);
+  };
+
+  const handleSendCustomEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetEmail.trim() || !emailSubject.trim() || !emailMessage.trim()) {
+      toast.error('All email fields (Recipient, Subject, Message) are required');
+      return;
+    }
+
+    setIsSendingEmail(true);
+    try {
+      const response = await fetch('/api/admin/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Password': adminPassword
+        },
+        body: JSON.stringify({
+          toEmail: targetEmail.trim(),
+          toName: targetName.trim(),
+          subject: emailSubject.trim(),
+          message: emailMessage.trim()
+        })
+      });
+
+      let data;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        throw new Error(text || `HTTP ${response.status} Server Error`);
+      }
+
+      if (!response.ok) throw new Error(data.message || 'Failed to send email');
+
+      toast.success(`🎉 Email sent successfully to ${targetEmail}`);
+      setIsSendEmailModalOpen(false);
+      setEmailSubject('');
+      setEmailMessage('');
+    } catch (err: any) {
+      toast.error(`Failed to send email: ${err.message}`);
+    } finally {
+      setIsSendingEmail(false);
     }
   };
 
@@ -1141,6 +1238,15 @@ const AdminDashboard = () => {
                   >
                     <Upload className="h-3.5 w-3.5 text-emerald-600" />
                     Upload Data
+                  </Button>
+                  <Button 
+                    onClick={handleTestEmail} 
+                    variant="outline"
+                    disabled={isTestingEmail}
+                    className="rounded-xl flex gap-2 items-center hover:bg-purple-50 bg-white border-purple-300 text-purple-700 text-xs font-semibold"
+                  >
+                    <Mail className={`h-3.5 w-3.5 text-purple-600 ${isTestingEmail ? 'animate-bounce' : ''}`} />
+                    {isTestingEmail ? 'Testing SMTP...' : 'Test SMTP Mail'}
                   </Button>
                   <Button 
                     onClick={() => setIsAdminUserModalOpen(true)} 
@@ -2352,23 +2458,172 @@ const AdminDashboard = () => {
 
                     <div className="space-y-1.5">
                       <span className="text-xs font-semibold text-slate-500 uppercase">Query / Message Content:</span>
-                      <div className="bg-slate-100/70 p-4 rounded-xl text-slate-800 text-sm leading-relaxed whitespace-pre-wrap border border-slate-200 font-sans">
+                      <div className="bg-slate-100/70 p-4 rounded-xl text-slate-800 text-sm leading-relaxed whitespace-pre-wrap border border-slate-200 font-sans max-h-40 overflow-y-auto">
                         {selectedLead.message}
                       </div>
                     </div>
 
-                    <DialogFooter className="pt-4 flex gap-2">
+                    {/* Inline Auto-Formatted Email Reply Box */}
+                    <div className="space-y-3 pt-3 border-t border-slate-200">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="inline-reply-text" className="text-xs font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1.5">
+                          <Mail className="h-4 w-4 text-indigo-600" /> Type Reply (Auto-Formatted & Emailed)
+                        </Label>
+                        <span className="text-[11px] text-emerald-600 font-medium">Sends via medialeveling360@gmail.com</span>
+                      </div>
+
+                      {/* Quick Presets */}
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setInlineReplyText(`Hi ${selectedLead.name},\n\nThank you for reaching out to Media Levelling regarding your inquiry! We've received your request and would love to help drive growth for your brand.\n\n`)}
+                          className="text-[11px] bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 rounded-lg px-2.5 py-1 transition-colors"
+                        >
+                          👋 Quick Greeting
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setInlineReplyText(`Hi ${selectedLead.name},\n\nWe have reviewed your website & requirements for ${selectedLead.service || 'your project'}. Our growth strategy & proposal are ready for review.\n\n`)}
+                          className="text-[11px] bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 rounded-lg px-2.5 py-1 transition-colors"
+                        >
+                          💼 Proposal Ready
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setInlineReplyText(`Hi ${selectedLead.name},\n\nYour Free Marketing Audit has been completed! Would you be available for a brief 15-minute strategy call this week to go over the findings?\n\n`)}
+                          className="text-[11px] bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 rounded-lg px-2.5 py-1 transition-colors"
+                        >
+                          📅 Schedule Call
+                        </button>
+                      </div>
+
+                      <Textarea
+                        id="inline-reply-text"
+                        rows={4}
+                        placeholder={`Type your reply message to ${selectedLead.name} here...`}
+                        value={inlineReplyText}
+                        onChange={(e) => setInlineReplyText(e.target.value)}
+                        className="rounded-xl text-sm border-indigo-200 focus:border-indigo-500 font-sans"
+                      />
+
+                      <Button
+                        type="button"
+                        disabled={isSendingEmail || !inlineReplyText.trim()}
+                        onClick={async () => {
+                          if (!inlineReplyText.trim()) return;
+                          setIsSendingEmail(true);
+                          try {
+                            const res = await fetch('/api/admin/send-email', {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                'X-Admin-Password': adminPassword
+                              },
+                              body: JSON.stringify({
+                                toEmail: selectedLead.email,
+                                toName: selectedLead.name,
+                                subject: `Re: Your ${selectedLead.service || 'Inquiry'} — Media Levelling`,
+                                message: inlineReplyText,
+                                originalMessage: selectedLead.message,
+                                leadId: selectedLead._id
+                              })
+                            });
+
+                            let data;
+                            const contentType = res.headers.get("content-type");
+                            if (contentType && contentType.includes("application/json")) {
+                              data = await res.json();
+                            } else {
+                              const text = await res.text();
+                              throw new Error(text || `Server returned HTTP ${res.status}`);
+                            }
+
+                            if (!res.ok) throw new Error(data.message || 'Failed to send reply');
+                            toast.success(`🎉 Auto-formatted email sent to ${selectedLead.email}`);
+                            selectedLead.status = 'replied';
+                            setInlineReplyText('');
+                            setIsLeadModalOpen(false);
+                            fetchData();
+                          } catch (err: any) {
+                            toast.error(`Error sending email: ${err.message}`);
+                          } finally {
+                            setIsSendingEmail(false);
+                          }
+                        }}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-5 font-bold flex items-center justify-center gap-2 shadow-md"
+                      >
+                        <Mail className="h-4 w-4" />
+                        {isSendingEmail ? 'Formatting & Sending Email...' : `Auto-Format & Send Mail to ${selectedLead.name}`}
+                      </Button>
+                    </div>
+
+                    <DialogFooter className="pt-2 flex justify-end gap-2">
                       <Button variant="outline" onClick={() => setIsLeadModalOpen(false)} className="rounded-xl">
                         Close
                       </Button>
-                      <a href={`mailto:${selectedLead.email}?subject=Regarding your Media Levelling inquiry`}>
-                        <Button className="bg-[#18181b] hover:bg-black text-white rounded-xl px-6 flex items-center gap-2">
-                          <Mail className="h-4 w-4" /> Reply via Email
-                        </Button>
-                      </a>
                     </DialogFooter>
                   </div>
                 )}
+              </DialogContent>
+            </Dialog>
+
+            {/* Direct Send Custom Email Modal */}
+            <Dialog open={isSendEmailModalOpen} onOpenChange={setIsSendEmailModalOpen}>
+              <DialogContent className="sm:max-w-md rounded-2xl p-6 bg-white">
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                    <Mail className="h-5 w-5 text-indigo-600" /> Compose & Send Direct Email
+                  </DialogTitle>
+                  <DialogDescription>
+                    Send an automated, branded HTML email directly to this client via medialeveling360@gmail.com.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleSendCustomEmail} className="space-y-4 py-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="send-email-to" className="text-xs font-semibold text-slate-600">Recipient Email</Label>
+                    <Input
+                      id="send-email-to"
+                      type="email"
+                      value={targetEmail}
+                      onChange={(e) => setTargetEmail(e.target.value)}
+                      required
+                      placeholder="client@example.com"
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="send-email-subject" className="text-xs font-semibold text-slate-600">Subject Line</Label>
+                    <Input
+                      id="send-email-subject"
+                      type="text"
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                      required
+                      placeholder="Subject of your email..."
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="send-email-msg" className="text-xs font-semibold text-slate-600">Message Body</Label>
+                    <Textarea
+                      id="send-email-msg"
+                      rows={5}
+                      value={emailMessage}
+                      onChange={(e) => setEmailMessage(e.target.value)}
+                      required
+                      placeholder="Type your reply or notification message here..."
+                      className="rounded-xl text-sm"
+                    />
+                  </div>
+                  <DialogFooter className="pt-4 flex gap-2">
+                    <Button type="button" variant="outline" onClick={() => setIsSendEmailModalOpen(false)} className="rounded-xl">
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={isSendingEmail} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-6">
+                      {isSendingEmail ? 'Sending...' : 'Send Email Now'}
+                    </Button>
+                  </DialogFooter>
+                </form>
               </DialogContent>
             </Dialog>
 
