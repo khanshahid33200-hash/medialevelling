@@ -1,12 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import mongoose from 'mongoose';
 import nodemailer from 'nodemailer';
-import connectDB from './config/db.js';
-import Order from './models/Order.js';
-import Post from './models/Post.js';
-import PortfolioItem from './models/PortfolioItem.js';
 import './config/firebase-admin.js';
 
 // Load environment variables
@@ -118,9 +113,7 @@ const sendThankYouEmail = async ({ toEmail, toName, subject, bodyHtml }) => {
   });
 };
 
-// Connect to Database & Firebase Admin
-connectDB();
-
+// Server Initialization
 const app = express();
 
 // Middleware
@@ -355,10 +348,6 @@ const memoryPortfolioItems = [
   }
 ];
 
-const isDbConnected = () => {
-  return mongoose.connection.readyState === 1;
-};
-
 // Helper for admin authentication
 const authenticateAdmin = (req, res, next) => {
   const adminEmail = req.headers['x-admin-email'] || req.query.adminEmail;
@@ -417,17 +406,9 @@ app.post('/api/orders', async (req, res) => {
       updatedAt: new Date()
     };
 
-    let savedOrder;
-    if (isDbConnected()) {
-      const order = new Order(orderData);
-      await order.save();
-      savedOrder = order;
-      console.log(`Saved order ${orderId} in MongoDB`);
-    } else {
-      memoryOrders.push(orderData);
-      savedOrder = orderData;
-      console.log(`Saved order ${orderId} in MEMORY fallback (MongoDB offline)`);
-    }
+    memoryOrders.push(orderData);
+    const savedOrder = orderData;
+    console.log(`Saved order ${orderId} in memory`);
 
     // Await thank-you email so Vercel Serverless doesn't freeze the process mid-flight
     await sendThankYouEmail({
@@ -481,13 +462,7 @@ app.post('/api/orders', async (req, res) => {
 app.get('/api/orders/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
-    let order = null;
-
-    if (isDbConnected()) {
-      order = await Order.findOne({ orderId });
-    } else {
-      order = memoryOrders.find(o => o.orderId === orderId);
-    }
+    const order = memoryOrders.find(o => o.orderId === orderId);
 
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
@@ -497,15 +472,8 @@ app.get('/api/orders/:orderId', async (req, res) => {
     const isExpired = new Date() > new Date(order.expiresAt);
     
     if (isPending && isExpired) {
-      if (isDbConnected()) {
-        const dbOrder = order;
-        dbOrder.paymentStatus = 'expired';
-        await dbOrder.save();
-        return res.json(dbOrder);
-      } else {
-        order.paymentStatus = 'expired';
-        return res.json(order);
-      }
+      order.paymentStatus = 'expired';
+      return res.json(order);
     }
 
     return res.json(order);
@@ -532,52 +500,6 @@ app.post('/api/orders/:orderId/submit-txn', async (req, res) => {
       return res.status(400).json({ message: 'Invalid Transaction ID format (should be 8-18 alphanumeric characters)' });
     }
 
-    if (isDbConnected()) {
-      const order = await Order.findOne({ orderId });
-      if (!order) {
-        return res.status(404).json({ message: 'Order not found' });
-      }
-
-      if (order.paymentStatus === 'pending' && new Date() > order.expiresAt) {
-        return res.status(400).json({ message: 'Payment window has expired' });
-      }
-
-      if (order.paymentStatus !== 'pending') {
-        return res.status(400).json({ message: `Payment already processed (Status: ${order.paymentStatus})` });
-      }
-
-      const duplicateOrder = await Order.findOne({ upiTxnId: sanitizedTxnId });
-      if (duplicateOrder) {
-        return res.status(400).json({ message: 'This Transaction ID has already been submitted' });
-      }
-
-      order.upiTxnId = sanitizedTxnId;
-      order.paymentStatus = 'submitted';
-      await order.save();
-
-      // Notify Admin (khanshahid33200@gmail.com) about UTR submission
-      await sendEmailHelper({
-        to: NOTIFICATION_RECEIVER_EMAIL,
-        subject: `💳 Payment UTR Submitted for Order ${orderId}: UTR ${sanitizedTxnId}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e4e4e7; border-radius: 12px; max-width: 600px;">
-            <h2 style="color: #4f46e5; margin-top: 0;">💳 Payment UTR Submitted</h2>
-            <p>Customer has submitted their UPI Transaction ID for verification!</p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 16px 0;" />
-            <p><strong>Order ID:</strong> ${orderId}</p>
-            <p><strong>Customer Name:</strong> ${order.customerName}</p>
-            <p><strong>Email:</strong> ${order.email}</p>
-            <p><strong>Package:</strong> ${order.productName}</p>
-            <p><strong>Amount:</strong> ₹${order.amount}</p>
-            <p><strong>Submitted UTR / Txn ID:</strong> <strong style="font-size: 18px; color: #059669; font-family: monospace;">${sanitizedTxnId}</strong></p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 16px 0;" />
-            <p>Please log in to your Admin Panel to verify and approve this payment.</p>
-          </div>
-        `
-      });
-
-      return res.json({ message: 'Transaction ID submitted successfully', order });
-    } else {
       const order = memoryOrders.find(o => o.orderId === orderId);
       if (!order) {
         return res.status(404).json({ message: 'Order not found' });
@@ -620,7 +542,6 @@ app.post('/api/orders/:orderId/submit-txn', async (req, res) => {
       });
 
       return res.json({ message: 'Transaction ID submitted successfully', order });
-    }
   } catch (error) {
     console.error('Error submitting transaction:', error);
     return res.status(500).json({ message: 'Failed to submit transaction ID', error: error.message });
@@ -633,24 +554,6 @@ app.get('/api/admin/orders', authenticateAdmin, async (req, res) => {
   try {
     const { search, status } = req.query;
 
-    if (isDbConnected()) {
-      const query = {};
-      if (status && status !== 'all') {
-        query.paymentStatus = status;
-      }
-      if (search && typeof search === 'string') {
-        const searchRegex = new RegExp(search.trim(), 'i');
-        query.$or = [
-          { orderId: searchRegex },
-          { upiTxnId: searchRegex },
-          { customerName: searchRegex },
-          { email: searchRegex },
-          { productName: searchRegex }
-        ];
-      }
-      const orders = await Order.find(query).sort({ createdAt: -1 });
-      return res.json(orders);
-    } else {
       let filtered = [...memoryOrders];
       if (status && status !== 'all') {
         filtered = filtered.filter(o => o.paymentStatus === status);
@@ -667,7 +570,6 @@ app.get('/api/admin/orders', authenticateAdmin, async (req, res) => {
       }
       filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       return res.json(filtered);
-    }
   } catch (error) {
     console.error('Error fetching admin orders:', error);
     return res.status(500).json({ message: 'Failed to fetch orders', error: error.message });
@@ -685,36 +587,6 @@ app.patch('/api/admin/orders/:orderId/verify', authenticateAdmin, async (req, re
       return res.status(400).json({ message: 'Invalid status' });
     }
 
-    if (isDbConnected()) {
-      const order = await Order.findOne({ orderId });
-      if (!order) {
-        return res.status(404).json({ message: 'Order not found' });
-      }
-
-      order.paymentStatus = status;
-      await order.save();
-
-      // Notify customer of order status update
-      await sendEmailHelper({
-        to: order.email,
-        subject: `Order Update (${order.orderId}) — Media Levelling`,
-        html: `
-          <h2>Order Update Notification</h2>
-          <p>Hello ${order.customerName},</p>
-          <p>Your order (<strong>${order.orderId}</strong> - ${order.productName}) status has been updated to: <strong style="text-transform:uppercase; color:${status === 'approved' || status === 'verified' ? '#059669' : '#dc2626'}">${status}</strong>.</p>
-          <p>If you have any questions, please reply to this email or contact us at <a href="mailto:info@medialevelling.com">info@medialevelling.com</a>.</p>
-        `
-      });
-
-      // Also notify Admin at khanshahid33200@gmail.com
-      await sendEmailHelper({
-        to: NOTIFICATION_RECEIVER_EMAIL,
-        subject: `Order ${order.orderId} Marked as ${status.toUpperCase()}`,
-        html: `<p>Order <strong>${order.orderId}</strong> (${order.customerName} - ₹${order.amount}) has been marked as <strong>${status}</strong> by admin.</p>`
-      });
-
-      return res.json({ message: `Order marked as ${status}`, order });
-    } else {
       const order = memoryOrders.find(o => o.orderId === orderId);
       if (!order) {
         return res.status(404).json({ message: 'Order not found' });
@@ -741,7 +613,6 @@ app.patch('/api/admin/orders/:orderId/verify', authenticateAdmin, async (req, re
       });
 
       return res.json({ message: `Order marked as ${status}`, order });
-    }
   } catch (error) {
     console.error('Error verifying order:', error);
     return res.status(500).json({ message: 'Failed to update order status', error: error.message });
@@ -767,24 +638,6 @@ app.put('/api/admin/orders/:orderId', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ message: 'Amount must be positive' });
     }
 
-    if (isDbConnected()) {
-      const order = await Order.findOne({ orderId });
-      if (!order) {
-        return res.status(404).json({ message: 'Order not found' });
-      }
-
-      order.customerName = customerName.trim();
-      order.email = email.trim().toLowerCase();
-      order.productName = productName;
-      order.amount = parsedAmount;
-      order.upiTxnId = upiTxnId ? upiTxnId.trim().toUpperCase() : undefined;
-      if (paymentStatus) {
-        order.paymentStatus = paymentStatus;
-      }
-
-      await order.save();
-      return res.json({ message: 'Order updated successfully', order });
-    } else {
       const idx = memoryOrders.findIndex(o => o.orderId === orderId);
       if (idx === -1) {
         return res.status(404).json({ message: 'Order not found' });
@@ -802,7 +655,6 @@ app.put('/api/admin/orders/:orderId', authenticateAdmin, async (req, res) => {
       };
 
       return res.json({ message: 'Order updated successfully', order: memoryOrders[idx] });
-    }
   } catch (error) {
     console.error('Error editing order:', error);
     return res.status(500).json({ message: 'Failed to edit order', error: error.message });
@@ -815,20 +667,12 @@ app.delete('/api/admin/orders/:orderId', authenticateAdmin, async (req, res) => 
   try {
     const { orderId } = req.params;
 
-    if (isDbConnected()) {
-      const result = await Order.deleteOne({ orderId });
-      if (result.deletedCount === 0) {
-        return res.status(404).json({ message: 'Order not found' });
-      }
-      return res.json({ message: 'Order deleted successfully' });
-    } else {
       const idx = memoryOrders.findIndex(o => o.orderId === orderId);
       if (idx === -1) {
         return res.status(404).json({ message: 'Order not found' });
       }
       memoryOrders.splice(idx, 1);
       return res.json({ message: 'Order deleted successfully in memory' });
-    }
   } catch (error) {
     console.error('Error deleting order:', error);
     return res.status(500).json({ message: 'Failed to delete order', error: error.message });
@@ -844,14 +688,9 @@ app.delete('/api/admin/orders/:orderId', authenticateAdmin, async (req, res) => 
 // GET /api/posts
 app.get('/api/posts', async (req, res) => {
   try {
-    if (isDbConnected()) {
-      const posts = await Post.find({ status: 'published' }).sort({ createdAt: -1 });
-      return res.json(posts);
-    } else {
       const published = memoryPosts.filter(p => p.status === 'published');
       published.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       return res.json(published);
-    }
   } catch (error) {
     console.error('Error fetching posts:', error);
     return res.status(500).json({ message: 'Failed to fetch posts' });
@@ -863,14 +702,7 @@ app.get('/api/posts', async (req, res) => {
 app.get('/api/posts/:slug', async (req, res) => {
   try {
     const { slug } = req.params;
-    let post = null;
-
-    if (isDbConnected()) {
-      post = await Post.findOne({ slug, status: 'published' });
-    } else {
-      post = memoryPosts.find(p => p.slug === slug && p.status === 'published');
-    }
-
+    const post = memoryPosts.find(p => p.slug === slug && p.status === 'published');
     if (!post) {
       return res.status(404).json({ message: 'Post not found' });
     }
@@ -885,14 +717,9 @@ app.get('/api/posts/:slug', async (req, res) => {
 // GET /api/admin/posts
 app.get('/api/admin/posts', authenticateAdmin, async (req, res) => {
   try {
-    if (isDbConnected()) {
-      const posts = await Post.find().sort({ createdAt: -1 });
-      return res.json(posts);
-    } else {
       const sorted = [...memoryPosts];
       sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       return res.json(sorted);
-    }
   } catch (error) {
     console.error('Error fetching admin posts:', error);
     return res.status(500).json({ message: 'Failed to fetch posts' });
@@ -929,18 +756,6 @@ app.post('/api/admin/posts', authenticateAdmin, async (req, res) => {
       updatedAt: new Date()
     };
 
-    if (isDbConnected()) {
-      // Check duplicate slug in DB
-      const existing = await Post.findOne({ slug: sanitizedSlug });
-      if (existing) {
-        return res.status(400).json({ message: 'Post slug already exists' });
-      }
-
-      const post = new Post(postData);
-      await post.save();
-      return res.status(201).json(post);
-    } else {
-      // Memory duplicate check
       const existing = memoryPosts.find(p => p.slug === sanitizedSlug);
       if (existing) {
         return res.status(400).json({ message: 'Post slug already exists' });
@@ -952,7 +767,6 @@ app.post('/api/admin/posts', authenticateAdmin, async (req, res) => {
       };
       memoryPosts.push(newPost);
       return res.status(201).json(newPost);
-    }
   } catch (error) {
     console.error('Error creating post:', error);
     return res.status(500).json({ message: 'Failed to create post', error: error.message });
@@ -978,29 +792,6 @@ app.put('/api/admin/posts/:postId', authenticateAdmin, async (req, res) => {
 
     const sanitizedSlug = slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
 
-    if (isDbConnected()) {
-      // Check duplicate slug (excluding current post)
-      const duplicate = await Post.findOne({ slug: sanitizedSlug, _id: { $ne: postId } });
-      if (duplicate) {
-        return res.status(400).json({ message: 'Post slug already exists' });
-      }
-
-      const post = await Post.findById(postId);
-      if (!post) {
-        return res.status(404).json({ message: 'Post not found' });
-      }
-
-      post.title = title.trim();
-      post.slug = sanitizedSlug;
-      post.content = content;
-      post.summary = summary ? summary.trim() : undefined;
-      post.author = author ? author.trim() : 'Admin';
-      post.status = status;
-      if (image !== undefined) post.image = image;
-
-      await post.save();
-      return res.json({ message: 'Post updated successfully', post });
-    } else {
       const idx = memoryPosts.findIndex(p => p._id === postId);
       if (idx === -1) {
         return res.status(404).json({ message: 'Post not found' });
@@ -1024,7 +815,6 @@ app.put('/api/admin/posts/:postId', authenticateAdmin, async (req, res) => {
       };
 
       return res.json({ message: 'Post updated successfully', post: memoryPosts[idx] });
-    }
   } catch (error) {
     console.error('Error updating post:', error);
     return res.status(500).json({ message: 'Failed to update post', error: error.message });
@@ -1037,20 +827,12 @@ app.delete('/api/admin/posts/:postId', authenticateAdmin, async (req, res) => {
   try {
     const { postId } = req.params;
 
-    if (isDbConnected()) {
-      const result = await Post.deleteOne({ _id: postId });
-      if (result.deletedCount === 0) {
-        return res.status(404).json({ message: 'Post not found' });
-      }
-      return res.json({ message: 'Post deleted successfully' });
-    } else {
       const idx = memoryPosts.findIndex(p => p._id === postId);
       if (idx === -1) {
         return res.status(404).json({ message: 'Post not found' });
       }
       memoryPosts.splice(idx, 1);
       return res.json({ message: 'Post deleted successfully in memory' });
-    }
   } catch (error) {
     console.error('Error deleting post:', error);
     return res.status(500).json({ message: 'Failed to delete post' });
@@ -1062,41 +844,13 @@ app.delete('/api/admin/posts/:postId', authenticateAdmin, async (req, res) => {
 // PORTFOLIO API ENDPOINTS
 // ==========================================
 
-// Helper to seed portfolio items if database is connected and empty
-const seedPortfolioIfEmpty = async () => {
-  try {
-    if (isDbConnected()) {
-      const count = await PortfolioItem.countDocuments();
-      if (count === 0) {
-        console.log('Seeding portfolio items into MongoDB...');
-        await PortfolioItem.insertMany(memoryPortfolioItems.map(item => {
-          const { _id, ...rest } = item;
-          return rest; // Let MongoDB generate its own ObjectId
-        }));
-        console.log('Portfolio seeded successfully');
-      }
-    }
-  } catch (error) {
-    console.error('Error seeding portfolio:', error);
-  }
-};
-
-// Seed portfolio on startup
-setTimeout(seedPortfolioIfEmpty, 5000);
-
 // Route: Get portfolio items (Public)
 // GET /api/portfolio
 app.get('/api/portfolio', async (req, res) => {
   try {
-    if (isDbConnected()) {
-      await seedPortfolioIfEmpty();
-      const items = await PortfolioItem.find().sort({ createdAt: -1 });
-      return res.json(items);
-    } else {
-      const sorted = [...memoryPortfolioItems];
-      sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      return res.json(sorted);
-    }
+    const sorted = [...memoryPortfolioItems];
+    sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return res.json(sorted);
   } catch (error) {
     console.error('Error fetching portfolio:', error);
     return res.status(500).json({ message: 'Failed to fetch portfolio items' });
@@ -1107,14 +861,9 @@ app.get('/api/portfolio', async (req, res) => {
 // GET /api/admin/portfolio
 app.get('/api/admin/portfolio', authenticateAdmin, async (req, res) => {
   try {
-    if (isDbConnected()) {
-      const items = await PortfolioItem.find().sort({ createdAt: -1 });
-      return res.json(items);
-    } else {
       const sorted = [...memoryPortfolioItems];
       sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       return res.json(sorted);
-    }
   } catch (error) {
     console.error('Error fetching admin portfolio:', error);
     return res.status(500).json({ message: 'Failed to fetch portfolio items' });
@@ -1156,18 +905,12 @@ app.post('/api/admin/portfolio', authenticateAdmin, async (req, res) => {
       updatedAt: new Date()
     };
 
-    if (isDbConnected()) {
-      const newItem = new PortfolioItem(itemData);
-      await newItem.save();
-      return res.status(201).json(newItem);
-    } else {
       const newItem = {
         _id: `portfolio-${Date.now()}`,
         ...itemData
       };
       memoryPortfolioItems.push(newItem);
       return res.status(201).json(newItem);
-    }
   } catch (error) {
     console.error('Error creating portfolio item:', error);
     return res.status(500).json({ message: 'Failed to create portfolio item', error: error.message });
@@ -1209,17 +952,6 @@ app.put('/api/admin/portfolio/:itemId', authenticateAdmin, async (req, res) => {
       updatedAt: new Date()
     };
 
-    if (isDbConnected()) {
-      const updatedItem = await PortfolioItem.findByIdAndUpdate(
-        itemId, 
-        { $set: updateData },
-        { new: true }
-      );
-      if (!updatedItem) {
-        return res.status(404).json({ message: 'Portfolio item not found' });
-      }
-      return res.json({ message: 'Portfolio item updated successfully', item: updatedItem });
-    } else {
       const idx = memoryPortfolioItems.findIndex(p => p._id === itemId);
       if (idx === -1) {
         return res.status(404).json({ message: 'Portfolio item not found' });
@@ -1232,7 +964,6 @@ app.put('/api/admin/portfolio/:itemId', authenticateAdmin, async (req, res) => {
       };
       
       return res.json({ message: 'Portfolio item updated successfully in memory', item: memoryPortfolioItems[idx] });
-    }
   } catch (error) {
     console.error('Error updating portfolio item:', error);
     return res.status(500).json({ message: 'Failed to update portfolio item', error: error.message });
@@ -1245,20 +976,12 @@ app.delete('/api/admin/portfolio/:itemId', authenticateAdmin, async (req, res) =
   try {
     const { itemId } = req.params;
 
-    if (isDbConnected()) {
-      const result = await PortfolioItem.deleteOne({ _id: itemId });
-      if (result.deletedCount === 0) {
-        return res.status(404).json({ message: 'Portfolio item not found' });
-      }
-      return res.json({ message: 'Portfolio item deleted successfully' });
-    } else {
       const idx = memoryPortfolioItems.findIndex(p => p._id === itemId);
       if (idx === -1) {
         return res.status(404).json({ message: 'Portfolio item not found' });
       }
       memoryPortfolioItems.splice(idx, 1);
       return res.json({ message: 'Portfolio item deleted successfully in memory' });
-    }
   } catch (error) {
     console.error('Error deleting portfolio item:', error);
     return res.status(500).json({ message: 'Failed to delete portfolio item' });
@@ -1533,7 +1256,7 @@ app.post('/api/admin/test-email', authenticateAdmin, async (req, res) => {
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
-    database: isDbConnected() ? 'connected' : 'offline_memory_fallback', 
+    engine: 'active_in_memory_and_firebase', 
     time: new Date() 
   });
 });
@@ -1543,7 +1266,6 @@ if (!process.env.VERCEL) {
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-    console.log(`Database connected state: ${isDbConnected() ? 'CONNECTED' : 'OFFLINE (Using memory fallback)'}`);
   });
 }
 

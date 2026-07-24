@@ -1,7 +1,7 @@
 {
   "name": "upi-payment-server",
   "version": "1.0.0",
-  "description": "UPI payment system backend using Express and MongoDB",
+  "description": "Media Levelling backend using Express, Firebase, and Nodemailer",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -13,7 +13,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "firebase-admin": "^12.0.0",
-    "mongoose": "^8.3.1"
+    "nodemailer": "^6.9.13"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"
