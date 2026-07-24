@@ -40,7 +40,7 @@ const sendEmailHelper = async ({ to, subject, html, replyTo }) => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          from: process.env.RESEND_FROM || 'Media Levelling <onboarding@resend.dev>',
+          from: process.env.RESEND_FROM || 'onboarding@resend.dev',
           to: [to],
           subject,
           html,
@@ -48,13 +48,19 @@ const sendEmailHelper = async ({ to, subject, html, replyTo }) => {
         })
       });
       const data = await res.json();
-      if (res.ok) {
+      if (res.ok && data.id) {
         console.log(`[Resend Success]: Sent to ${to} | ID: ${data.id}`);
         return { success: true, messageId: data.id };
       }
       console.warn('[Resend API Error Response]:', data);
+      if (process.env.VERCEL) {
+        return { success: false, error: data.message || data.name || 'Resend API returned error' };
+      }
     } catch (e) {
       console.error('[Resend Exception]:', e.message);
+      if (process.env.VERCEL) {
+        return { success: false, error: e.message };
+      }
     }
   }
 
