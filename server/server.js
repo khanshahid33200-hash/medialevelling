@@ -29,13 +29,14 @@ const sendEmailHelper = async ({ to, subject, html, replyTo }) => {
   const fromEmail = (process.env.GMAIL_USER || 'medialeveling360@gmail.com').trim();
 
   // Provider 1: Resend API (HTTP HTTPS Port 443 — Official Vercel Partner)
-  if (process.env.RESEND_API_KEY) {
+  const resendKey = (process.env.RESEND_API_KEY || 're_7GkYsuvH_BJksL8SsPpPW9FTHDMKyomtL').trim();
+  if (resendKey) {
     try {
       console.log(`[Resend HTTP API] Sending email to ${to}...`);
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.RESEND_API_KEY.trim()}`,
+          'Authorization': `Bearer ${resendKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
